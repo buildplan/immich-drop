@@ -1,6 +1,6 @@
 services:
   immich-drop:
-    build: .
+    image: ghcr.io/buildplan/immich-drop:latest
     container_name: immich-drop
     restart: unless-stopped
     ports:
