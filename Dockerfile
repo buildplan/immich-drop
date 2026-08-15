@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.7
 # ---- Builder Stage ----
-FROM python:3.11-slim AS builder
+FROM python:3.14-slim AS builder
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
@@ -15,7 +15,7 @@ RUN pip install --no-cache-dir --upgrade pip setuptools wheel && \
     pip install --no-cache-dir -r requirements.txt
 
 # ---- Final Stage ----
-FROM python:3.11-slim
+FROM python:3.14-slim
 
 # Pull in the latest debian security patches.
 RUN apt-get update \
