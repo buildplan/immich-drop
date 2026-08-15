@@ -280,13 +280,18 @@ def immich_headers(request: Optional[Request] = None) -> dict:
     """Headers for Immich API calls using either session access token or API key."""
     headers = {"Accept": "application/json"}
     token = None
+    is_api_key = False
     try:
         if request is not None:
             token = request.session.get("accessToken")
+            is_api_key = request.session.get("isApiKey", False)
     except Exception:
         token = None
     if token:
-        headers["Authorization"] = f"Bearer {token}"
+        if is_api_key:
+            headers["x-api-key"] = token
+        else:
+            headers["Authorization"] = f"Bearer {token}"
     elif SETTINGS.immich_api_key:
         headers["x-api-key"] = SETTINGS.immich_api_key
     return headers
@@ -860,40 +865,72 @@ async def api_album_reset() -> dict:
 
 @app.post("/api/login")
 async def api_login(request: Request) -> JSONResponse:
-    """Authenticate against Immich using email/password; store token in session."""
+    """Authenticate against Immich using email/password or API Key; store token in session."""
     try:
         body = await request.json()
     except Exception:
         return JSONResponse({"error": "invalid_json"}, status_code=400)
-    email = (body or {}).get("email")
-    password = (body or {}).get("password")
-    if not email or not password:
+
+    email = (body or {}).get("email", "").strip()
+    password = (body or {}).get("password", "").strip()
+
+    if not password:
         return JSONResponse({"error": "missing_credentials"}, status_code=400)
+
+    client = app.state.httpx_client
+    is_api_key = False
+
     try:
-        # Use shared httpx client from app state
-        client = app.state.httpx_client
-        r = await client.post(f"{SETTINGS.normalized_base_url}/auth/login", headers={"Content-Type": "application/json", "Accept": "application/json"}, json={"email": email, "password": password}, timeout=15.0)
+        if not email:
+            # Treat password as API key
+            r = await client.get(f"{SETTINGS.normalized_base_url}/users/me", headers={"x-api-key": password, "Accept": "application/json"}, timeout=15.0)
+            is_api_key = True
+        else:
+            # Standard email/password login
+            r = await client.post(f"{SETTINGS.normalized_base_url}/auth/login", headers={"Content-Type": "application/json", "Accept": "application/json"}, json={"email": email, "password": password}, timeout=15.0)
     except Exception as e:
         logger.exception("Login request failed: %s", e)
         return JSONResponse({"error": "login_failed"}, status_code=502)
+
     if r.status_code not in (200, 201):
         logger.warning("Auth rejected: %s - %s", r.status_code, r.text)
         return JSONResponse({"error": "unauthorized"}, status_code=401)
+
     data = r.json() if r.content else {}
-    token = data.get("accessToken")
+
+    if is_api_key:
+        token = password
+        user_email = data.get("email")
+        user_id = data.get("id")
+    else:
+        token = data.get("accessToken")
+        user_email = data.get("userEmail")
+        user_id = data.get("userId")
+
     if not token:
-        logger.warning("Auth response missing accessToken")
+        logger.warning("Auth response missing token")
         return JSONResponse({"error": "invalid_response"}, status_code=502)
+
+    name = data.get("name") or data.get("firstName") or user_email
+    is_admin = data.get("isAdmin", False)
+
     # Store only token and basic info in cookie session
     request.session.update({
         "accessToken": token,
-        "userEmail": data.get("userEmail"),
-        "userId": data.get("userId"),
-        "name": data.get("name"),
-        "isAdmin": data.get("isAdmin", False),
+        "isApiKey": is_api_key,
+        "userEmail": user_email,
+        "userId": user_id,
+        "name": name,
+        "isAdmin": is_admin,
     })
-    logger.info("User %s logged in", data.get("userEmail"))
-    return JSONResponse({"ok": True, **{k: data.get(k) for k in ("userEmail","userId","name","isAdmin")}})
+    logger.info("User %s logged in (API Key: %s)", user_email, is_api_key)
+    return JSONResponse({
+        "ok": True,
+        "userEmail": user_email,
+        "userId": user_id,
+        "name": name,
+        "isAdmin": is_admin
+    })
 
 @app.post("/api/logout")
 async def api_logout(request: Request) -> dict:
@@ -1357,7 +1394,7 @@ async def api_invite_info(token: str, request: Request) -> JSONResponse:
     if not row:
         return JSONResponse({"error": "not_found"}, status_code=404)
     _, album_id, album_name, max_uses, used_count, expires_at, claimed, claimed_at, password_hash, disabled, link_name = row
-    
+
     # If we have an album_id but no album_name, try to fetch it from Immich
     if album_id and not album_name:
         try:
@@ -1371,7 +1408,7 @@ async def api_invite_info(token: str, request: Request) -> JSONResponse:
                         break
         except Exception as e:
             logger.exception("Error fetching album name: %s", e)
-    
+
     # compute remaining
     remaining = None
     try:
