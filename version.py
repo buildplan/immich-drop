@@ -1,2 +1,3 @@
 """Version information for immich-drop."""
-VERSION = "1.8.1"
+import os
+VERSION = os.getenv("APP_VERSION") or "1.9.0"

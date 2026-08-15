@@ -10,6 +10,7 @@ Admin users log in to create public invite links; invite links are always public
 - **Invite Links:** public-by-URL links for uploads; one-time or multi-use
 - **Manage Links:** search/sort, enable/disable, delete, edit name/expiry
 - **Row Actions:** icon-only actions with tooltips (Open, Copy, Details, QR, Save)
+- **OIDC Compatibility (API Key Login):** log into the dashboard securely via an Immich API Key if email/password login is disabled via OIDC.
 - **Passwords (optional):** protect invites with a password gate
 - **Albums (optional):** upload into a specific album (auto-create supported)
 - **Duplicate Prevention:** local SHA‑1 cache (+ optional Immich bulk-check)
@@ -52,7 +53,7 @@ version: "3.9"
 
 services:
   immich-drop:
-    image: ttlequals0/immich-drop:latest
+    image: ghcr.io/buildplan/immich-drop:latest
     pull_policy: always
     container_name: immich-drop
     restart: unless-stopped
@@ -266,6 +267,21 @@ immich_drop/
 - **gallery-dl** and **yt-dlp** (installed automatically in Docker image)
 
 ---
+
+## OIDC & API Key Permissions
+
+If you use OIDC to authenticate with Immich and have disabled local email/password login, you can log into the Immich Drop dashboard using an Immich API Key instead of a password. Simply leave the "Email" field blank on the login page, and paste your API key into the "Password" field.
+
+Whether configuring the server `IMMICH_API_KEY` in your `.env` or logging into the dashboard using a personal API key, ensure the API Key has the following scopes enabled in the Immich UI:
+
+- **`user.read`** (Required to identify your account)
+- **`asset.read`** (Required for duplicate checks)
+- **`asset.upload`** (Required to actually upload photos/videos)
+- **`album.read`** (Required to list your albums)
+- **`album.create`** (Required if you want Immich Drop to automatically create an album)
+- **`album.update`** / **`albumAsset.create`** (Required to assign uploaded photos to albums)
+
+---
 # Local dev quickstart
 
 ## Development
@@ -289,7 +305,7 @@ PORT=8080
 
 # Immich connection (include /api)
 IMMICH_BASE_URL=http://REPLACE_ME:2283/api
-IMMICH_API_KEY=ADD-YOUR-API-KEY   # needs: asset.upload; for albums also: album.create, album.read, albumAsset.create
+IMMICH_API_KEY=ADD-YOUR-API-KEY   # needs: user.read, asset.read, asset.upload; for albums: album.create, album.read, albumAsset.create
 MAX_CONCURRENT=3
 
 # Public uploader page (optional) -- disabled by default

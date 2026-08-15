@@ -51,7 +51,9 @@ RUN mkdir -p /data && \
 USER appuser
 
 # Defaults (can be overridden via compose env)
-ENV HOST=0.0.0.0 \
+ARG APP_VERSION
+ENV APP_VERSION=${APP_VERSION} \
+    HOST=0.0.0.0 \
     PORT=8080 \
     STATE_DB=/data/state.db
 
