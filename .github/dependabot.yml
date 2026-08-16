@@ -22,6 +22,10 @@ updates:
     labels:
       - "dependencies"
       - "python"
+    groups:
+      action-dependencies:
+        patterns:
+          - "*"
   - package-ecosystem: docker
     directory: "/"
     schedule:
@@ -29,3 +33,17 @@ updates:
     labels:
       - "dependencies"
       - "docker"
+    groups:
+      action-dependencies:
+        patterns:
+          - "*"
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    labels:
+      - "github-actions"
+    groups:
+      action-dependencies:
+        patterns:
+          - "*"
