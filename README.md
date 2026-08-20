@@ -329,6 +329,9 @@ LOG_LEVEL=DEBUG
 CHUNKED_UPLOADS_ENABLED=true
 CHUNK_SIZE_MB=95
 
+# disable showing hostname in Test connection ("ping") API for privacy reasons
+TEST_CONNECTION_SHOW_HOSTNAME=false
+TEST_CONNECTION_ENABLED=true
 ```
 
 
@@ -359,6 +362,7 @@ You can keep a checked‑in `/.env.example` with the keys above for onboarding.
 - The Immich API key remains **server‑side**; the browser never sees it.  
 - No browsing of uploaded media; only ephemeral session state is shown.  
 - Run behind HTTPS with a reverse proxy and restrict CORS to your domain(s).
+- For extra privacy set `TEST_CONNECTION_SHOW_HOSTNAME=false` to hide the upstream Immich server hostname from the user or `TEST_CONNECTION_ENABLED=false` to disable the **test connection button** completely.
 
 ## Usage flow
 
