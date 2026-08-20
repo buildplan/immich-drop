@@ -73,16 +73,18 @@ class UploadOutcome:
     error: Optional[str] = None
 
 
-def _multipart_parts(fields: Dict[str, str], filename: str, content_type: str, boundary: str) -> tuple[bytes, bytes]:
+def _multipart_parts(
+    fields: Dict[str, str], filename: str, content_type: str, boundary: str
+) -> tuple[bytes, bytes]:
     """Build the multipart head (fields + file part header) and tail."""
     safe = filename.replace("\\", "_").replace('"', "'")
     head = "".join(
-        f"--{boundary}\r\nContent-Disposition: form-data; name=\"{k}\"\r\n\r\n{v}\r\n"
+        f'--{boundary}\r\nContent-Disposition: form-data; name="{k}"\r\n\r\n{v}\r\n'
         for k, v in fields.items()
     )
     head += (
-        f"--{boundary}\r\nContent-Disposition: form-data; name=\"assetData\"; "
-        f"filename=\"{safe}\"\r\nContent-Type: {content_type}\r\n\r\n"
+        f'--{boundary}\r\nContent-Disposition: form-data; name="assetData"; '
+        f'filename="{safe}"\r\nContent-Type: {content_type}\r\n\r\n'
     )
     tail = f"\r\n--{boundary}--\r\n"
     return head.encode("utf-8"), tail.encode("utf-8")
@@ -113,7 +115,9 @@ async def upload_asset(
         "filename": filename,
     }
     boundary = uuid.uuid4().hex
-    head, tail = _multipart_parts(fields, filename, content_type or "application/octet-stream", boundary)
+    head, tail = _multipart_parts(
+        fields, filename, content_type or "application/octet-stream", boundary
+    )
     total = len(head) + len(file_bytes) + len(tail)
 
     async def body():
@@ -121,7 +125,7 @@ async def upload_asset(
         last_pct = -1
         for blob in (head, file_bytes, tail):
             for i in range(0, len(blob), _UPLOAD_CHUNK):
-                chunk = blob[i:i + _UPLOAD_CHUNK]
+                chunk = blob[i : i + _UPLOAD_CHUNK]
                 sent += len(chunk)
                 if progress:
                     pct = int(sent * 100 / total)
@@ -139,7 +143,9 @@ async def upload_asset(
         "x-immich-checksum": checksum,
     }
     try:
-        r = await client.post(f"{base_url}/assets", headers=req_headers, content=body(), timeout=timeout)
+        r = await client.post(
+            f"{base_url}/assets", headers=req_headers, content=body(), timeout=timeout
+        )
     except Exception as e:
         return UploadOutcome(ok=False, status_code=0, error=str(e))
     if r.status_code in (200, 201):
@@ -153,7 +159,12 @@ async def upload_asset(
     return UploadOutcome(ok=False, status_code=r.status_code, error=parse_error(r))
 
 
-async def bulk_upload_check(client: httpx.AsyncClient, base_url: str, headers: Dict[str, str], checks: List[dict]) -> Dict[str, dict]:
+async def bulk_upload_check(
+    client: httpx.AsyncClient,
+    base_url: str,
+    headers: Dict[str, str],
+    checks: List[dict],
+) -> Dict[str, dict]:
     """POST /assets/bulk-upload-check; returns map id->result (empty on failure)."""
     try:
         r = await client.post(
@@ -186,7 +197,10 @@ async def find_or_create_album(
                     return album.get("id")
         elif r.status_code >= 500:
             # Do not create albums while Immich is erroring; avoids duplicates
-            logger.warning("Immich returned %s when listing albums, skipping album assignment", r.status_code)
+            logger.warning(
+                "Immich returned %s when listing albums, skipping album assignment",
+                r.status_code,
+            )
             return None
         payload = {"albumName": album_name}
         if description:
@@ -205,7 +219,13 @@ async def find_or_create_album(
     return None
 
 
-async def add_to_album(client: httpx.AsyncClient, base_url: str, headers: Dict[str, str], album_id: str, asset_id: str) -> bool:
+async def add_to_album(
+    client: httpx.AsyncClient,
+    base_url: str,
+    headers: Dict[str, str],
+    album_id: str,
+    asset_id: str,
+) -> bool:
     """PUT /albums/{id}/assets. Duplicate membership counts as success."""
     if not album_id or not asset_id:
         return False
@@ -226,7 +246,9 @@ async def add_to_album(client: httpx.AsyncClient, base_url: str, headers: Dict[s
         return False
 
 
-async def ping(client: httpx.AsyncClient, base_url: str, headers: Dict[str, str]) -> bool:
+async def ping(
+    client: httpx.AsyncClient, base_url: str, headers: Dict[str, str]
+) -> bool:
     """Best-effort reachability check (v3 endpoints)."""
     for path in ("/server/ping", "/server/version", "/users/me"):
         try:

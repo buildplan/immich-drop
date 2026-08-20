@@ -1,4 +1,5 @@
 """Build the Dead-Drop iOS Shortcut as a signed .shortcut file."""
+
 import plistlib
 import subprocess
 import sys
@@ -99,44 +100,77 @@ actions.append(act("is.workflow.actions.detect.link", {"WFInput": shortcut_input
 actions.append(act("is.workflow.actions.setvariable", {"WFVariableName": "urls"}))
 
 # Get First Item from URLs
-actions.append(act("is.workflow.actions.getitemfromlist", {
-    "WFInput": var_ref("urls"),
-    "WFItemSpecifier": "First Item",
-}))
+actions.append(
+    act(
+        "is.workflow.actions.getitemfromlist",
+        {
+            "WFInput": var_ref("urls"),
+            "WFItemSpecifier": "First Item",
+        },
+    )
+)
 actions.append(act("is.workflow.actions.setvariable", {"WFVariableName": "firstUrl"}))
 
 # ============================================================
 # IF URLs has any value -> URL branch
 # ============================================================
-actions.append(act("is.workflow.actions.conditional", {
-    "GroupingIdentifier": GID_IF_URL,
-    "WFControlFlowMode": 0,
-    "WFCondition": 100,  # has any value
-    "WFInput": {"Type": "Variable", "Variable": var_ref("urls")},
-}))
+actions.append(
+    act(
+        "is.workflow.actions.conditional",
+        {
+            "GroupingIdentifier": GID_IF_URL,
+            "WFControlFlowMode": 0,
+            "WFCondition": 100,  # has any value
+            "WFInput": {"Type": "Variable", "Variable": var_ref("urls")},
+        },
+    )
+)
 
 # POST to /api/upload/url with JSON body {"url": firstUrl}
-actions.append(act("is.workflow.actions.downloadurl", {
-    "WFURL": f"{SERVER}/api/upload/url",
-    "WFHTTPMethod": "POST",
-    "WFHTTPBodyType": "JSON",
-    "WFJSONValues": {"Value": {"WFDictionaryFieldValueItems": [
-        {"WFItemType": 0,
-         "WFKey": {"Value": {"string": "url"}, "WFSerializationType": "WFTextTokenString"},
-         "WFValue": text_with_vars([("", "firstUrl")]),
+actions.append(
+    act(
+        "is.workflow.actions.downloadurl",
+        {
+            "WFURL": f"{SERVER}/api/upload/url",
+            "WFHTTPMethod": "POST",
+            "WFHTTPBodyType": "JSON",
+            "WFJSONValues": {
+                "Value": {
+                    "WFDictionaryFieldValueItems": [
+                        {
+                            "WFItemType": 0,
+                            "WFKey": {
+                                "Value": {"string": "url"},
+                                "WFSerializationType": "WFTextTokenString",
+                            },
+                            "WFValue": text_with_vars([("", "firstUrl")]),
+                        },
+                    ]
+                },
+                "WFSerializationType": "WFDictionaryFieldValue",
+            },
         },
-    ]}, "WFSerializationType": "WFDictionaryFieldValue"},
-}))
-actions.append(act("is.workflow.actions.setvariable", {"WFVariableName": "submitResponse"}))
+    )
+)
+actions.append(
+    act("is.workflow.actions.setvariable", {"WFVariableName": "submitResponse"})
+)
 
 # Get dictionary, extract job_id
-actions.append(act("is.workflow.actions.detect.dictionary", {"WFInput": var_ref("submitResponse")}))
+actions.append(
+    act("is.workflow.actions.detect.dictionary", {"WFInput": var_ref("submitResponse")})
+)
 actions.append(act("is.workflow.actions.setvariable", {"WFVariableName": "submitDict"}))
 
-actions.append(act("is.workflow.actions.getvalueforkey", {
-    "WFInput": var_ref("submitDict"),
-    "WFDictionaryKey": "job_id",
-}))
+actions.append(
+    act(
+        "is.workflow.actions.getvalueforkey",
+        {
+            "WFInput": var_ref("submitDict"),
+            "WFDictionaryKey": "job_id",
+        },
+    )
+)
 actions.append(act("is.workflow.actions.setvariable", {"WFVariableName": "jobid"}))
 
 # No initial done variable needed -- we check for field presence
@@ -144,111 +178,211 @@ actions.append(act("is.workflow.actions.setvariable", {"WFVariableName": "jobid"
 # ============================================================
 # REPEAT 100 times (polling loop)
 # ============================================================
-actions.append(act("is.workflow.actions.repeat.count", {
-    "GroupingIdentifier": GID_REPEAT,
-    "WFControlFlowMode": 0,
-    "WFRepeatCount": 30,
-}))
+actions.append(
+    act(
+        "is.workflow.actions.repeat.count",
+        {
+            "GroupingIdentifier": GID_REPEAT,
+            "WFControlFlowMode": 0,
+            "WFRepeatCount": 30,
+        },
+    )
+)
 
 # Only poll if isDone does NOT have any value (skip after first completion/failure)
 GID_IF_NOT_DONE = "B0000001-0000-0000-0000-00000000000B"
-actions.append(act("is.workflow.actions.conditional", {
-    "GroupingIdentifier": GID_IF_NOT_DONE,
-    "WFControlFlowMode": 0,
-    "WFCondition": 101,  # does NOT have any value
-    "WFInput": {"Type": "Variable", "Variable": var_ref("isDone")},
-}))
+actions.append(
+    act(
+        "is.workflow.actions.conditional",
+        {
+            "GroupingIdentifier": GID_IF_NOT_DONE,
+            "WFControlFlowMode": 0,
+            "WFCondition": 101,  # does NOT have any value
+            "WFInput": {"Type": "Variable", "Variable": var_ref("isDone")},
+        },
+    )
+)
 
 # Build poll URL and GET it
-actions.append(act("is.workflow.actions.gettext", {
-    "WFTextActionText": text_with_vars([
-        (f"{SERVER}/api/upload/url/status/", None),
-        ("", "jobid"),
-    ]),
-}))
-actions.append(act("is.workflow.actions.downloadurl", {
-    "WFHTTPMethod": "GET",
-}))
+actions.append(
+    act(
+        "is.workflow.actions.gettext",
+        {
+            "WFTextActionText": text_with_vars(
+                [
+                    (f"{SERVER}/api/upload/url/status/", None),
+                    ("", "jobid"),
+                ]
+            ),
+        },
+    )
+)
+actions.append(
+    act(
+        "is.workflow.actions.downloadurl",
+        {
+            "WFHTTPMethod": "GET",
+        },
+    )
+)
 actions.append(act("is.workflow.actions.setvariable", {"WFVariableName": "pollRaw"}))
 
 # Parse JSON into dictionary
-actions.append(act("is.workflow.actions.detect.dictionary", {
-    "WFInput": var_ref("pollRaw"),
-}))
+actions.append(
+    act(
+        "is.workflow.actions.detect.dictionary",
+        {
+            "WFInput": var_ref("pollRaw"),
+        },
+    )
+)
 actions.append(act("is.workflow.actions.setvariable", {"WFVariableName": "pollDict"}))
 
 # Check "result" key
-actions.append(act("is.workflow.actions.getvalueforkey", {
-    "WFInput": var_ref("pollDict"),
-    "WFDictionaryKey": "result",
-}))
-actions.append(act("is.workflow.actions.setvariable", {"WFVariableName": "checkResult"}))
+actions.append(
+    act(
+        "is.workflow.actions.getvalueforkey",
+        {
+            "WFInput": var_ref("pollDict"),
+            "WFDictionaryKey": "result",
+        },
+    )
+)
+actions.append(
+    act("is.workflow.actions.setvariable", {"WFVariableName": "checkResult"})
+)
 
 # If result has any value -> set isDone and alert
-actions.append(act("is.workflow.actions.conditional", {
-    "GroupingIdentifier": GID_IF_COMPLETED,
-    "WFControlFlowMode": 0,
-    "WFCondition": 100,
-    "WFInput": {"Type": "Variable", "Variable": var_ref("checkResult")},
-}))
-actions.append(act("is.workflow.actions.gettext", {
-    "WFTextActionText": {"Value": {"string": "yes", "attachmentsByRange": {}}, "WFSerializationType": "WFTextTokenString"},
-}))
+actions.append(
+    act(
+        "is.workflow.actions.conditional",
+        {
+            "GroupingIdentifier": GID_IF_COMPLETED,
+            "WFControlFlowMode": 0,
+            "WFCondition": 100,
+            "WFInput": {"Type": "Variable", "Variable": var_ref("checkResult")},
+        },
+    )
+)
+actions.append(
+    act(
+        "is.workflow.actions.gettext",
+        {
+            "WFTextActionText": {
+                "Value": {"string": "yes", "attachmentsByRange": {}},
+                "WFSerializationType": "WFTextTokenString",
+            },
+        },
+    )
+)
 actions.append(act("is.workflow.actions.setvariable", {"WFVariableName": "isDone"}))
-actions.append(act("is.workflow.actions.alert", {
-    "WFAlertActionTitle": "Dead-Drop",
-    "WFAlertActionMessage": "Upload complete",
-}))
+actions.append(
+    act(
+        "is.workflow.actions.alert",
+        {
+            "WFAlertActionTitle": "Dead-Drop",
+            "WFAlertActionMessage": "Upload complete",
+        },
+    )
+)
 actions.append(act("is.workflow.actions.exit", {}))
-actions.append(act("is.workflow.actions.conditional", {
-    "GroupingIdentifier": GID_IF_COMPLETED,
-    "WFControlFlowMode": 2,
-}))
+actions.append(
+    act(
+        "is.workflow.actions.conditional",
+        {
+            "GroupingIdentifier": GID_IF_COMPLETED,
+            "WFControlFlowMode": 2,
+        },
+    )
+)
 
 # Check "error" key
-actions.append(act("is.workflow.actions.getvalueforkey", {
-    "WFInput": var_ref("pollDict"),
-    "WFDictionaryKey": "error",
-}))
+actions.append(
+    act(
+        "is.workflow.actions.getvalueforkey",
+        {
+            "WFInput": var_ref("pollDict"),
+            "WFDictionaryKey": "error",
+        },
+    )
+)
 actions.append(act("is.workflow.actions.setvariable", {"WFVariableName": "checkError"}))
 
 # If error has any value -> set isDone and alert
-actions.append(act("is.workflow.actions.conditional", {
-    "GroupingIdentifier": GID_IF_FAILED,
-    "WFControlFlowMode": 0,
-    "WFCondition": 100,
-    "WFInput": {"Type": "Variable", "Variable": var_ref("checkError")},
-}))
-actions.append(act("is.workflow.actions.gettext", {
-    "WFTextActionText": {"Value": {"string": "yes", "attachmentsByRange": {}}, "WFSerializationType": "WFTextTokenString"},
-}))
+actions.append(
+    act(
+        "is.workflow.actions.conditional",
+        {
+            "GroupingIdentifier": GID_IF_FAILED,
+            "WFControlFlowMode": 0,
+            "WFCondition": 100,
+            "WFInput": {"Type": "Variable", "Variable": var_ref("checkError")},
+        },
+    )
+)
+actions.append(
+    act(
+        "is.workflow.actions.gettext",
+        {
+            "WFTextActionText": {
+                "Value": {"string": "yes", "attachmentsByRange": {}},
+                "WFSerializationType": "WFTextTokenString",
+            },
+        },
+    )
+)
 actions.append(act("is.workflow.actions.setvariable", {"WFVariableName": "isDone"}))
-actions.append(act("is.workflow.actions.alert", {
-    "WFAlertActionTitle": "Dead-Drop",
-    "WFAlertActionMessage": "Upload failed",
-}))
+actions.append(
+    act(
+        "is.workflow.actions.alert",
+        {
+            "WFAlertActionTitle": "Dead-Drop",
+            "WFAlertActionMessage": "Upload failed",
+        },
+    )
+)
 actions.append(act("is.workflow.actions.exit", {}))
-actions.append(act("is.workflow.actions.conditional", {
-    "GroupingIdentifier": GID_IF_FAILED,
-    "WFControlFlowMode": 2,
-}))
+actions.append(
+    act(
+        "is.workflow.actions.conditional",
+        {
+            "GroupingIdentifier": GID_IF_FAILED,
+            "WFControlFlowMode": 2,
+        },
+    )
+)
 
 # End If isDone does not have any value
-actions.append(act("is.workflow.actions.conditional", {
-    "GroupingIdentifier": GID_IF_NOT_DONE,
-    "WFControlFlowMode": 2,
-}))
+actions.append(
+    act(
+        "is.workflow.actions.conditional",
+        {
+            "GroupingIdentifier": GID_IF_NOT_DONE,
+            "WFControlFlowMode": 2,
+        },
+    )
+)
 
 # End Repeat
-actions.append(act("is.workflow.actions.repeat.count", {
-    "GroupingIdentifier": GID_REPEAT,
-    "WFControlFlowMode": 2,
-}))
+actions.append(
+    act(
+        "is.workflow.actions.repeat.count",
+        {
+            "GroupingIdentifier": GID_REPEAT,
+            "WFControlFlowMode": 2,
+        },
+    )
+)
 # End If (URL branch -- no Otherwise, URL only)
-actions.append(act("is.workflow.actions.conditional", {
-    "GroupingIdentifier": GID_IF_URL,
-    "WFControlFlowMode": 2,
-}))
+actions.append(
+    act(
+        "is.workflow.actions.conditional",
+        {
+            "GroupingIdentifier": GID_IF_URL,
+            "WFControlFlowMode": 2,
+        },
+    )
+)
 
 # ============================================================
 # Build plist and sign
@@ -296,7 +430,8 @@ with open(unsigned, "wb") as f:
 
 result = subprocess.run(
     ["shortcuts", "sign", "--mode", "anyone", "--input", unsigned, "--output", signed],
-    capture_output=True, text=True,
+    capture_output=True,
+    text=True,
 )
 if result.returncode == 0:
     print(f"Built: {signed}")

@@ -24,13 +24,28 @@ from typing import Dict, List, Optional
 
 import httpx
 import logging
-from fastapi import FastAPI, HTTPException, UploadFile, WebSocket, WebSocketDisconnect, Request, Form
-from fastapi.responses import HTMLResponse, JSONResponse, FileResponse, RedirectResponse, Response
+from fastapi import (
+    FastAPI,
+    HTTPException,
+    UploadFile,
+    WebSocket,
+    WebSocketDisconnect,
+    Request,
+    Form,
+)
+from fastapi.responses import (
+    HTMLResponse,
+    JSONResponse,
+    FileResponse,
+    RedirectResponse,
+    Response,
+)
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from starlette.websockets import WebSocketState
 from starlette.middleware.sessions import SessionMiddleware
 from PIL import Image, ExifTags
+
 try:
     import qrcode
 except Exception:
@@ -82,23 +97,35 @@ app.add_middleware(
 SETTINGS: Settings = load_settings()
 
 # Basic logging setup using settings
-logging.basicConfig(level=SETTINGS.log_level, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+logging.basicConfig(
+    level=SETTINGS.log_level, format="%(asctime)s %(levelname)s %(name)s: %(message)s"
+)
 # Third-party libraries log large volumes at DEBUG; keep them at WARNING
 # regardless of the app LOG_LEVEL. httpx stays at INFO: its one-line-per-request
 # entries are the only record of individual Immich API calls.
-for _noisy in ("PIL", "python_multipart", "httpcore", "urllib3", "websockets", "charset_normalizer"):
+for _noisy in (
+    "PIL",
+    "python_multipart",
+    "httpcore",
+    "urllib3",
+    "websockets",
+    "charset_normalizer",
+):
     logging.getLogger(_noisy).setLevel(logging.WARNING)
 logging.getLogger("httpx").setLevel(logging.INFO)
 logger = logging.getLogger("immich_drop")
 
 # Cookie-based session for short-lived auth token storage (no persistence)
-app.add_middleware(SessionMiddleware, secret_key=SETTINGS.session_secret, same_site="lax")
+app.add_middleware(
+    SessionMiddleware, secret_key=SETTINGS.session_secret, same_site="lax"
+)
 
 FRONTEND_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "frontend")
 app.mount("/static", StaticFiles(directory=FRONTEND_DIR), name="static")
 
 # Include URL/batch upload routes
 from .api_routes import create_api_routes
+
 api_router = create_api_routes(SETTINGS)
 app.include_router(api_router)
 
@@ -115,10 +142,12 @@ ALBUM_ID: Optional[str] = None
 # Lock to prevent concurrent album creation race conditions
 _album_lock = asyncio.Lock()
 
+
 def reset_album_cache() -> None:
     """Invalidate the cached Immich album id so next use re-resolves it."""
     global ALBUM_ID
     ALBUM_ID = None
+
 
 # ---------- DB (local dedupe cache) ----------
 # All tables (uploads, invites, platform_cookies, upload_events) are created
@@ -127,16 +156,20 @@ def reset_album_cache() -> None:
 db.configure(SETTINGS.state_db)
 db.init_db()
 
+
 def db_lookup_checksum(checksum: str) -> Optional[dict]:
     """Return a record for the given checksum if seen before (None if not)."""
     conn = db.connect()
     cur = conn.cursor()
-    cur.execute("SELECT checksum, immich_asset_id FROM uploads WHERE checksum = ?", (checksum,))
+    cur.execute(
+        "SELECT checksum, immich_asset_id FROM uploads WHERE checksum = ?", (checksum,)
+    )
     row = cur.fetchone()
     conn.close()
     if row:
         return {"checksum": row[0], "immich_asset_id": row[1]}
     return None
+
 
 def db_lookup_device_asset(device_asset_id: str) -> bool:
     """True if a deviceAssetId has been uploaded by this service previously."""
@@ -147,21 +180,32 @@ def db_lookup_device_asset(device_asset_id: str) -> bool:
     conn.close()
     return bool(row)
 
-def db_insert_upload(checksum: str, filename: str, size: int, device_asset_id: str, immich_asset_id: Optional[str], created_at: str) -> None:
+
+def db_insert_upload(
+    checksum: str,
+    filename: str,
+    size: int,
+    device_asset_id: str,
+    immich_asset_id: Optional[str],
+    created_at: str,
+) -> None:
     """Insert a newly-uploaded asset into the local cache (ignore on duplicates)."""
     conn = db.connect()
     cur = conn.cursor()
     cur.execute(
         "INSERT OR IGNORE INTO uploads (checksum, filename, size, device_asset_id, immich_asset_id, created_at) VALUES (?,?,?,?,?,?)",
-        (checksum, filename, size, device_asset_id, immich_asset_id, created_at)
+        (checksum, filename, size, device_asset_id, immich_asset_id, created_at),
     )
     conn.commit()
     conn.close()
 
+
 # ---------- WebSocket hub ----------
+
 
 class SessionHub:
     """Holds WebSocket connections per session and broadcasts progress updates."""
+
     def __init__(self) -> None:
         self.sessions: Dict[str, List[WebSocket]] = {}
 
@@ -173,7 +217,11 @@ class SessionHub:
         """Drop closed sockets and cleanup empty session buckets."""
         if session_id not in self.sessions:
             return
-        self.sessions[session_id] = [w for w in self.sessions[session_id] if w.client_state == WebSocketState.CONNECTED]
+        self.sessions[session_id] = [
+            w
+            for w in self.sessions[session_id]
+            if w.client_state == WebSocketState.CONNECTED
+        ]
         if not self.sessions[session_id]:
             del self.sessions[session_id]
 
@@ -202,15 +250,18 @@ class SessionHub:
             except Exception:
                 pass
 
+
 hub = SessionHub()
 
 # ---------- Helpers ----------
+
 
 def sha1_hex(file_bytes: bytes) -> str:
     """Return SHA-1 hex digest of file_bytes."""
     h = hashlib.sha1()
     h.update(file_bytes)
     return h.hexdigest()
+
 
 _ID_RE = re.compile(r"^[0-9a-fA-F][0-9a-fA-F\-]{0,63}$")
 
@@ -231,7 +282,7 @@ def _validate_id(value: Optional[str]) -> str:
 def sanitize_filename(name: Optional[str]) -> str:
     """Return a minimally sanitized filename that preserves the original name.
 
-    - Removes control characters (\x00-\x1F, \x7F)
+    - Removes control characters (\x00-\x1f, \x7f)
     - Replaces path separators ('/' and '\\') with underscore
     - Falls back to 'file' if empty
     Other Unicode characters and spaces are preserved.
@@ -243,12 +294,13 @@ def sanitize_filename(name: Optional[str]) -> str:
         o = ord(ch)
         if o < 32 or o == 127:
             continue
-        if ch in ('/', '\\'):
-            cleaned_chars.append('_')
+        if ch in ("/", "\\"):
+            cleaned_chars.append("_")
         else:
             cleaned_chars.append(ch)
-    cleaned = ''.join(cleaned_chars).strip()
+    cleaned = "".join(cleaned_chars).strip()
     return cleaned or "file"
+
 
 def read_exif_datetimes(file_bytes: bytes):
     """
@@ -263,11 +315,13 @@ def read_exif_datetimes(file_bytes: bytes):
                 tags = {ExifTags.TAGS.get(k, k): v for k, v in exif.items()}
                 dt_original = tags.get("DateTimeOriginal") or tags.get("CreateDate")
                 dt_modified = tags.get("ModifyDate") or dt_original
+
                 def parse_dt(s: str):
                     try:
                         return datetime.strptime(s, "%Y:%m:%d %H:%M:%S")
                     except Exception:
                         return None
+
                 if isinstance(dt_original, str):
                     created = parse_dt(dt_original)
                 if isinstance(dt_modified, str):
@@ -275,6 +329,7 @@ def read_exif_datetimes(file_bytes: bytes):
     except Exception:
         pass
     return created, modified
+
 
 def immich_headers(request: Optional[Request] = None) -> dict:
     """Headers for Immich API calls using either session access token or API key."""
@@ -296,14 +351,19 @@ def immich_headers(request: Optional[Request] = None) -> dict:
         headers["x-api-key"] = SETTINGS.immich_api_key
     return headers
 
-async def get_or_create_album(request: Optional[Request] = None, album_name_override: Optional[str] = None) -> Optional[str]:
+
+async def get_or_create_album(
+    request: Optional[Request] = None, album_name_override: Optional[str] = None
+) -> Optional[str]:
     """Get existing album by name or create a new one. Returns album ID or None.
 
     Uses a lock to prevent race conditions when multiple concurrent uploads
     try to create the same album simultaneously.
     """
     global ALBUM_ID
-    album_name = album_name_override if album_name_override is not None else SETTINGS.album_name
+    album_name = (
+        album_name_override if album_name_override is not None else SETTINGS.album_name
+    )
     # Skip if no album name configured
     if not album_name:
         return None
@@ -329,22 +389,38 @@ async def get_or_create_album(request: Optional[Request] = None, album_name_over
             logger.info("Resolved album '%s' to ID: %s", album_name, ALBUM_ID)
         return found_id
 
-async def add_asset_to_album(asset_id: str, request: Optional[Request] = None, album_id_override: Optional[str] = None, album_name_override: Optional[str] = None) -> bool:
+
+async def add_asset_to_album(
+    asset_id: str,
+    request: Optional[Request] = None,
+    album_id_override: Optional[str] = None,
+    album_name_override: Optional[str] = None,
+) -> bool:
     """Add an asset to the configured album. Returns True on success."""
     album_id = album_id_override
     if not album_id:
-        album_id = await get_or_create_album(request=request, album_name_override=album_name_override)
+        album_id = await get_or_create_album(
+            request=request, album_name_override=album_name_override
+        )
     if not album_id or not asset_id:
         return False
     return await immich_client.add_to_album(
-        app.state.httpx_client, SETTINGS.normalized_base_url, immich_headers(request), album_id, asset_id
+        app.state.httpx_client,
+        SETTINGS.normalized_base_url,
+        immich_headers(request),
+        album_id,
+        asset_id,
     )
+
 
 async def immich_ping() -> bool:
     """Best-effort reachability check against a few Immich endpoints."""
     if not SETTINGS.immich_api_key:
         return False
-    return await immich_client.ping(app.state.httpx_client, SETTINGS.normalized_base_url, immich_headers())
+    return await immich_client.ping(
+        app.state.httpx_client, SETTINGS.normalized_base_url, immich_headers()
+    )
+
 
 async def immich_bulk_check(checks: List[dict]) -> Dict[str, dict]:
     """Try Immich bulk upload check; return map id->result (or empty on failure)."""
@@ -352,17 +428,30 @@ async def immich_bulk_check(checks: List[dict]) -> Dict[str, dict]:
         app.state.httpx_client, SETTINGS.normalized_base_url, immich_headers(), checks
     )
 
-async def send_progress(session_id: str, item_id: str, status: str, progress: int = 0, message: str = "", response_id: Optional[str] = None) -> None:
+
+async def send_progress(
+    session_id: str,
+    item_id: str,
+    status: str,
+    progress: int = 0,
+    message: str = "",
+    response_id: Optional[str] = None,
+) -> None:
     """Push a progress update over WebSocket for one queue item."""
-    await hub.send(session_id, {
-        "item_id": item_id,
-        "status": status,
-        "progress": progress,
-        "message": message,
-        "responseId": response_id,
-    })
+    await hub.send(
+        session_id,
+        {
+            "item_id": item_id,
+            "status": status,
+            "progress": progress,
+            "message": message,
+            "responseId": response_id,
+        },
+    )
+
 
 # ---------- Routes ----------
+
 
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request) -> HTMLResponse:
@@ -371,10 +460,12 @@ async def index(request: Request) -> HTMLResponse:
         return RedirectResponse(url="/login")
     return FileResponse(os.path.join(FRONTEND_DIR, "index.html"))
 
+
 @app.get("/login", response_class=HTMLResponse)
 async def login_page(_: Request) -> HTMLResponse:
     """Serve the login page."""
     return FileResponse(os.path.join(FRONTEND_DIR, "login.html"))
+
 
 @app.get("/menu", response_class=HTMLResponse)
 async def menu_page(request: Request) -> HTMLResponse:
@@ -383,11 +474,13 @@ async def menu_page(request: Request) -> HTMLResponse:
         return RedirectResponse(url="/login")
     return FileResponse(os.path.join(FRONTEND_DIR, "menu.html"))
 
+
 try:
     with open(os.path.join(FRONTEND_DIR, "favicon.png"), "rb") as _f:
         _FAVICON_BYTES: Optional[bytes] = _f.read()
 except Exception:
     _FAVICON_BYTES = None
+
 
 @app.get("/favicon.ico")
 async def favicon() -> Response:
@@ -396,14 +489,23 @@ async def favicon() -> Response:
         return Response(content=_FAVICON_BYTES, media_type="image/png")
     return Response(status_code=204)
 
+
 @app.post("/api/ping")
 async def api_ping() -> dict:
     """Connectivity test endpoint used by the UI to display a temporary banner."""
+    if not SETTINGS.test_connection_enabled:
+        return {"ok": False, "disabled": True}
+    ok = await immich_ping()
     return {
-        "ok": await immich_ping(),
-        "base_url": SETTINGS.normalized_base_url,
-        "album_name": SETTINGS.album_name if SETTINGS.album_name else None
+        "ok": ok,
+        "base_url": (
+            SETTINGS.normalized_base_url
+            if SETTINGS.test_connection_show_hostname
+            else None
+        ),
+        "album_name": SETTINGS.album_name if SETTINGS.album_name else None,
     }
+
 
 @app.get("/api/config")
 async def api_config() -> dict:
@@ -414,7 +516,9 @@ async def api_config() -> dict:
         "chunk_size_mb": SETTINGS.chunk_size_mb,
         "version": VERSION,
         "social_media_uploads": SETTINGS.social_media_uploads,
+        "test_connection_enabled": SETTINGS.test_connection_enabled,
     }
+
 
 @app.websocket("/ws")
 async def ws_endpoint(ws: WebSocket) -> None:
@@ -437,7 +541,9 @@ async def ws_endpoint(ws: WebSocket) -> None:
         while True:
             msg_task = asyncio.create_task(ws.receive_text())
             keep_task = asyncio.create_task(asyncio.sleep(30))
-            done, pending = await asyncio.wait({msg_task, keep_task}, return_when=asyncio.FIRST_COMPLETED)
+            done, pending = await asyncio.wait(
+                {msg_task, keep_task}, return_when=asyncio.FIRST_COMPLETED
+            )
             if msg_task in done:
                 try:
                     _ = msg_task.result()
@@ -453,7 +559,9 @@ async def ws_endpoint(ws: WebSocket) -> None:
     finally:
         await hub.disconnect(session_id, ws)
 
+
 # ---------- Upload core (shared by whole-file and chunked paths) ----------
+
 
 def check_invite_for_upload(request: Request, invite_token: str, session_id: str):
     """Validate an invite token for an upload attempt.
@@ -464,7 +572,10 @@ def check_invite_for_upload(request: Request, invite_token: str, session_id: str
     try:
         conn = db.connect()
         cur = conn.cursor()
-        cur.execute("SELECT token, album_id, album_name, max_uses, used_count, expires_at, COALESCE(claimed,0), claimed_by_session, password_hash, COALESCE(disabled,0) FROM invites WHERE token = ?", (invite_token,))
+        cur.execute(
+            "SELECT token, album_id, album_name, max_uses, used_count, expires_at, COALESCE(claimed,0), claimed_by_session, password_hash, COALESCE(disabled,0) FROM invites WHERE token = ?",
+            (invite_token,),
+        )
         row = cur.fetchone()
         conn.close()
     except Exception as e:
@@ -472,7 +583,18 @@ def check_invite_for_upload(request: Request, invite_token: str, session_id: str
         row = None
     if not row:
         return ("Invalid invite token", "invalid_invite", 403), None, None
-    _, album_id, album_name, max_uses, used_count, expires_at, claimed, claimed_by_session, password_hash, disabled = row
+    (
+        _,
+        album_id,
+        album_name,
+        max_uses,
+        used_count,
+        expires_at,
+        claimed,
+        claimed_by_session,
+        password_hash,
+        disabled,
+    ) = row
     # Admin deactivation check
     try:
         if int(disabled) == 1:
@@ -484,7 +606,11 @@ def check_invite_for_upload(request: Request, invite_token: str, session_id: str
         try:
             ia = request.session.get("inviteAuth") or {}
             if not ia.get(invite_token):
-                return ("Password required", "invite_password_required", 403), None, None
+                return (
+                    ("Password required", "invite_password_required", 403),
+                    None,
+                    None,
+                )
         except Exception:
             return ("Password required", "invite_password_required", 403), None, None
     # Expiry check
@@ -511,7 +637,7 @@ def check_invite_for_upload(request: Request, invite_token: str, session_id: str
                 curc = connc.cursor()
                 curc.execute(
                     "UPDATE invites SET claimed = 1, claimed_at = CURRENT_TIMESTAMP, claimed_by_session = ? WHERE token = ? AND (claimed IS NULL OR claimed = 0)",
-                    (session_id, invite_token)
+                    (session_id, invite_token),
                 )
                 connc.commit()
                 changed = connc.total_changes
@@ -524,7 +650,10 @@ def check_invite_for_upload(request: Request, invite_token: str, session_id: str
                 try:
                     conn2 = db.connect()
                     cur2 = conn2.cursor()
-                    cur2.execute("SELECT claimed_by_session FROM invites WHERE token = ?", (invite_token,))
+                    cur2.execute(
+                        "SELECT claimed_by_session FROM invites WHERE token = ?",
+                        (invite_token,),
+                    )
                     owner_row = cur2.fetchone()
                     conn2.close()
                     owner = owner_row[0] if owner_row else None
@@ -538,6 +667,7 @@ def check_invite_for_upload(request: Request, invite_token: str, session_id: str
             return ("Invite already used up", "invite_exhausted", 403), None, None
     return None, album_id, album_name
 
+
 def increment_invite_usage(invite_token: str) -> None:
     """Bump used_count after a successful upload (one-time stays at 1)."""
     try:
@@ -550,33 +680,59 @@ def increment_invite_usage(invite_token: str) -> None:
         except Exception:
             mx = None
         if mx == 1:
-            cur.execute("UPDATE invites SET used_count = 1 WHERE token = ?", (invite_token,))
+            cur.execute(
+                "UPDATE invites SET used_count = 1 WHERE token = ?", (invite_token,)
+            )
         else:
-            cur.execute("UPDATE invites SET used_count = used_count + 1 WHERE token = ?", (invite_token,))
+            cur.execute(
+                "UPDATE invites SET used_count = used_count + 1 WHERE token = ?",
+                (invite_token,),
+            )
         conn.commit()
         conn.close()
     except Exception as e:
         logger.exception("Failed to increment invite usage: %s", e)
 
-def log_upload_event(request: Request, invite_token: Optional[str], fingerprint: Optional[str], filename: str, size: int, checksum: str, asset_id: Optional[str]) -> None:
+
+def log_upload_event(
+    request: Request,
+    invite_token: Optional[str],
+    fingerprint: Optional[str],
+    filename: str,
+    size: int,
+    checksum: str,
+    asset_id: Optional[str],
+) -> None:
     """Record uploader identity and file metadata (best-effort)."""
     try:
         ip = None
         try:
-            ip = (request.client.host if request and request.client else None) or request.headers.get('x-forwarded-for')
+            ip = (
+                request.client.host if request and request.client else None
+            ) or request.headers.get("x-forwarded-for")
         except Exception:
             ip = None
-        ua = request.headers.get('user-agent', '') if request else ''
+        ua = request.headers.get("user-agent", "") if request else ""
         conn = db.connect()
         cur = conn.cursor()
         cur.execute(
             "INSERT INTO upload_events (token, ip, user_agent, fingerprint, filename, size, checksum, immich_asset_id) VALUES (?,?,?,?,?,?,?,?)",
-            (invite_token or '', ip, ua, fingerprint or '', filename, size, checksum, asset_id or None)
+            (
+                invite_token or "",
+                ip,
+                ua,
+                fingerprint or "",
+                filename,
+                size,
+                checksum,
+                asset_id or None,
+            ),
         )
         conn.commit()
         conn.close()
     except Exception:
         pass
+
 
 async def process_upload(
     request: Request,
@@ -595,7 +751,11 @@ async def process_upload(
     checksum = sha1_hex(raw)
 
     exif_created, exif_modified = read_exif_datetimes(raw)
-    created_at = exif_created or (datetime.fromtimestamp(last_modified / 1000, tz=timezone.utc) if last_modified else datetime.now(timezone.utc))
+    created_at = exif_created or (
+        datetime.fromtimestamp(last_modified / 1000, tz=timezone.utc)
+        if last_modified
+        else datetime.now(timezone.utc)
+    )
     modified_at = exif_modified or created_at
     created_iso = to_immich_iso(created_at)
 
@@ -603,25 +763,46 @@ async def process_upload(
     device_asset_id = f"{orig_name}-{last_modified or 0}-{size}"
 
     if db_lookup_checksum(checksum):
-        await send_progress(session_id, item_id, "duplicate", 100, "Duplicate (by checksum - local cache)")
+        await send_progress(
+            session_id,
+            item_id,
+            "duplicate",
+            100,
+            "Duplicate (by checksum - local cache)",
+        )
         return JSONResponse({"status": "duplicate", "id": None}, status_code=200)
     if db_lookup_device_asset(device_asset_id):
-        await send_progress(session_id, item_id, "duplicate", 100, "Already uploaded from this device (local cache)")
+        await send_progress(
+            session_id,
+            item_id,
+            "duplicate",
+            100,
+            "Already uploaded from this device (local cache)",
+        )
         return JSONResponse({"status": "duplicate", "id": None}, status_code=200)
 
     await send_progress(session_id, item_id, "checking", 2, "Checking duplicates…")
     bulk = await immich_bulk_check([{"id": item_id, "checksum": checksum}])
-    if bulk.get(item_id, {}).get("action") == "reject" and bulk[item_id].get("reason") == "duplicate":
+    if (
+        bulk.get(item_id, {}).get("action") == "reject"
+        and bulk[item_id].get("reason") == "duplicate"
+    ):
         asset_id = bulk[item_id].get("assetId")
-        db_insert_upload(checksum, orig_name, size, device_asset_id, asset_id, created_iso)
-        await send_progress(session_id, item_id, "duplicate", 100, "Duplicate (server)", asset_id)
+        db_insert_upload(
+            checksum, orig_name, size, device_asset_id, asset_id, created_iso
+        )
+        await send_progress(
+            session_id, item_id, "duplicate", 100, "Duplicate (server)", asset_id
+        )
         return JSONResponse({"status": "duplicate", "id": asset_id}, status_code=200)
 
     # Invite token validation (if provided)
     target_album_id: Optional[str] = None
     target_album_name: Optional[str] = None
     if invite_token:
-        error, target_album_id, target_album_name = check_invite_for_upload(request, invite_token, session_id)
+        error, target_album_id, target_album_name = check_invite_for_upload(
+            request, invite_token, session_id
+        )
         if error:
             msg, key, http_status = error
             await send_progress(session_id, item_id, "error", 100, msg)
@@ -648,7 +829,12 @@ async def process_upload(
     )
     if not outcome.ok:
         if outcome.status_code == 0:
-            logger.error("upload failed (session=%s item=%s): %s", session_id, item_id, outcome.error)
+            logger.error(
+                "upload failed (session=%s item=%s): %s",
+                session_id,
+                item_id,
+                outcome.error,
+            )
             await send_progress(session_id, item_id, "error", 100, "upload failed")
             return JSONResponse({"error": "upload failed"}, status_code=500)
         msg = outcome.error or "upload failed"
@@ -664,18 +850,35 @@ async def process_upload(
         if invite_token:
             # Only add if invite specified an album; do not fallback to env default
             if target_album_id or target_album_name:
-                if await add_asset_to_album(asset_id, request=request, album_id_override=target_album_id, album_name_override=target_album_name):
-                    status += f" (added to album '{target_album_name or target_album_id}')"
+                if await add_asset_to_album(
+                    asset_id,
+                    request=request,
+                    album_id_override=target_album_id,
+                    album_name_override=target_album_name,
+                ):
+                    status += (
+                        f" (added to album '{target_album_name or target_album_id}')"
+                    )
         elif SETTINGS.album_name:
             if await add_asset_to_album(asset_id, request=request):
                 status += f" (added to album '{SETTINGS.album_name}')"
 
-    await send_progress(session_id, item_id, "duplicate" if outcome.status == "duplicate" else "done", 100, status, asset_id)
+    await send_progress(
+        session_id,
+        item_id,
+        "duplicate" if outcome.status == "duplicate" else "done",
+        100,
+        status,
+        asset_id,
+    )
 
     if invite_token:
         increment_invite_usage(invite_token)
-    log_upload_event(request, invite_token, fingerprint, orig_name, size, checksum, asset_id)
+    log_upload_event(
+        request, invite_token, fingerprint, orig_name, size, checksum, asset_id
+    )
     return JSONResponse({"id": asset_id, "status": status}, status_code=200)
+
 
 @app.post("/api/upload")
 async def api_upload(
@@ -701,7 +904,9 @@ async def api_upload(
         fingerprint=fingerprint,
     )
 
+
 # --------- Chunked upload endpoints ---------
+
 
 def _chunk_dir(session_id: str, item_id: str) -> str:
     """Build a chunk-storage path that is provably inside CHUNK_ROOT.
@@ -715,6 +920,7 @@ def _chunk_dir(session_id: str, item_id: str) -> str:
     if not _ID_RE.match(sid) or not _ID_RE.match(iid):
         raise HTTPException(status_code=400, detail="invalid id")
     return os.path.join(CHUNK_ROOT, sid, iid)
+
 
 @app.post("/api/upload/chunk/init")
 async def api_upload_chunk_init(request: Request) -> JSONResponse:
@@ -736,7 +942,8 @@ async def api_upload_chunk_init(request: Request) -> JSONResponse:
             "size": (data or {}).get("size"),
             "last_modified": (data or {}).get("last_modified"),
             "invite_token": (data or {}).get("invite_token"),
-            "content_type": (data or {}).get("content_type") or "application/octet-stream",
+            "content_type": (data or {}).get("content_type")
+            or "application/octet-stream",
             "created_at": datetime.utcnow().isoformat(),
         }
         with open(os.path.join(d, "meta.json"), "w", encoding="utf-8") as f:
@@ -745,6 +952,7 @@ async def api_upload_chunk_init(request: Request) -> JSONResponse:
         logger.exception("Chunk init failed: %s", e)
         return JSONResponse({"error": "init_failed"}, status_code=500)
     return JSONResponse({"ok": True})
+
 
 @app.post("/api/upload/chunk")
 async def api_upload_chunk(
@@ -784,6 +992,7 @@ async def api_upload_chunk(
         return JSONResponse({"error": "chunk_write_failed"}, status_code=500)
     return JSONResponse({"ok": True})
 
+
 @app.post("/api/upload/chunk/complete")
 async def api_upload_chunk_complete(request: Request) -> JSONResponse:
     """Assemble all parts and run the regular upload flow to Immich."""
@@ -807,7 +1016,9 @@ async def api_upload_chunk_complete(request: Request) -> JSONResponse:
             meta = json.load(f)
     except Exception:
         meta = {}
-    total_chunks = int(meta.get("total_chunks") or (data or {}).get("total_chunks") or 0)
+    total_chunks = int(
+        meta.get("total_chunks") or (data or {}).get("total_chunks") or 0
+    )
     if total_chunks <= 0:
         return JSONResponse({"error": "missing_total"}, status_code=400)
     # Prefer the name captured at init if request did not include it
@@ -855,13 +1066,16 @@ async def api_upload_chunk_complete(request: Request) -> JSONResponse:
         fingerprint=fingerprint,
     )
 
+
 @app.post("/api/album/reset")
 async def api_album_reset() -> dict:
     """Explicit trigger from the UI to clear cached album id."""
     reset_album_cache()
     return {"ok": True}
 
+
 # ---------- Auth & Albums & Invites APIs ----------
+
 
 @app.post("/api/login")
 async def api_login(request: Request) -> JSONResponse:
@@ -883,11 +1097,23 @@ async def api_login(request: Request) -> JSONResponse:
     try:
         if not email:
             # Treat password as API key
-            r = await client.get(f"{SETTINGS.normalized_base_url}/users/me", headers={"x-api-key": password, "Accept": "application/json"}, timeout=15.0)
+            r = await client.get(
+                f"{SETTINGS.normalized_base_url}/users/me",
+                headers={"x-api-key": password, "Accept": "application/json"},
+                timeout=15.0,
+            )
             is_api_key = True
         else:
             # Standard email/password login
-            r = await client.post(f"{SETTINGS.normalized_base_url}/auth/login", headers={"Content-Type": "application/json", "Accept": "application/json"}, json={"email": email, "password": password}, timeout=15.0)
+            r = await client.post(
+                f"{SETTINGS.normalized_base_url}/auth/login",
+                headers={
+                    "Content-Type": "application/json",
+                    "Accept": "application/json",
+                },
+                json={"email": email, "password": password},
+                timeout=15.0,
+            )
     except Exception as e:
         logger.exception("Login request failed: %s", e)
         return JSONResponse({"error": "login_failed"}, status_code=502)
@@ -915,32 +1141,39 @@ async def api_login(request: Request) -> JSONResponse:
     is_admin = data.get("isAdmin", False)
 
     # Store only token and basic info in cookie session
-    request.session.update({
-        "accessToken": token,
-        "isApiKey": is_api_key,
-        "userEmail": user_email,
-        "userId": user_id,
-        "name": name,
-        "isAdmin": is_admin,
-    })
+    request.session.update(
+        {
+            "accessToken": token,
+            "isApiKey": is_api_key,
+            "userEmail": user_email,
+            "userId": user_id,
+            "name": name,
+            "isAdmin": is_admin,
+        }
+    )
     logger.info("User %s logged in (API Key: %s)", user_email, is_api_key)
-    return JSONResponse({
-        "ok": True,
-        "userEmail": user_email,
-        "userId": user_id,
-        "name": name,
-        "isAdmin": is_admin
-    })
+    return JSONResponse(
+        {
+            "ok": True,
+            "userEmail": user_email,
+            "userId": user_id,
+            "name": name,
+            "isAdmin": is_admin,
+        }
+    )
+
 
 @app.post("/api/logout")
 async def api_logout(request: Request) -> dict:
     request.session.clear()
     return {"ok": True}
 
+
 @app.get("/logout")
 async def logout_get(request: Request) -> RedirectResponse:
     request.session.clear()
     return RedirectResponse(url="/login")
+
 
 @app.get("/api/albums")
 async def api_albums(request: Request) -> JSONResponse:
@@ -948,7 +1181,11 @@ async def api_albums(request: Request) -> JSONResponse:
     try:
         # Use shared httpx client from app state
         client = app.state.httpx_client
-        r = await client.get(f"{SETTINGS.normalized_base_url}/albums", headers=immich_headers(request), timeout=10.0)
+        r = await client.get(
+            f"{SETTINGS.normalized_base_url}/albums",
+            headers=immich_headers(request),
+            timeout=10.0,
+        )
     except Exception as e:
         logger.exception("Albums request failed: %s", e)
         return JSONResponse({"error": "request_failed"}, status_code=502)
@@ -957,7 +1194,10 @@ async def api_albums(request: Request) -> JSONResponse:
     if r.status_code in (401, 403):
         logger.warning("Album list not allowed: %s - %s", r.status_code, r.text)
         return JSONResponse({"error": "forbidden"}, status_code=403)
-    return JSONResponse({"error": "unexpected_status", "status": r.status_code}, status_code=502)
+    return JSONResponse(
+        {"error": "unexpected_status", "status": r.status_code}, status_code=502
+    )
+
 
 @app.post("/api/albums")
 async def api_albums_create(request: Request) -> JSONResponse:
@@ -971,7 +1211,12 @@ async def api_albums_create(request: Request) -> JSONResponse:
     try:
         # Use shared httpx client from app state
         client = app.state.httpx_client
-        r = await client.post(f"{SETTINGS.normalized_base_url}/albums", headers={**immich_headers(request), "Content-Type": "application/json"}, json={"albumName": name}, timeout=10.0)
+        r = await client.post(
+            f"{SETTINGS.normalized_base_url}/albums",
+            headers={**immich_headers(request), "Content-Type": "application/json"},
+            json={"albumName": name},
+            timeout=10.0,
+        )
     except Exception as e:
         logger.exception("Create album failed: %s", e)
         return JSONResponse({"error": "request_failed"}, status_code=502)
@@ -980,10 +1225,15 @@ async def api_albums_create(request: Request) -> JSONResponse:
     if r.status_code in (401, 403):
         logger.warning("Create album forbidden: %s - %s", r.status_code, r.text)
         return JSONResponse({"error": "forbidden"}, status_code=403)
-    return JSONResponse({"error": "unexpected_status", "status": r.status_code, "body": r.text}, status_code=502)
+    return JSONResponse(
+        {"error": "unexpected_status", "status": r.status_code, "body": r.text},
+        status_code=502,
+    )
+
 
 # ---------- Invites (one-time/expiring links) ----------
 # Tables are created at startup by db.init_db().
+
 
 def hash_password(pw: str) -> str:
     """PBKDF2-SHA256 hash for invite passwords."""
@@ -991,8 +1241,9 @@ def hash_password(pw: str) -> str:
         return ""
     salt = os.urandom(16)
     iterations = 200_000
-    dk = hashlib.pbkdf2_hmac('sha256', pw.encode('utf-8'), salt, iterations)
+    dk = hashlib.pbkdf2_hmac("sha256", pw.encode("utf-8"), salt, iterations)
     return f"pbkdf2_sha256${iterations}${binascii.hexlify(salt).decode()}${binascii.hexlify(dk).decode()}"
+
 
 def verify_password(stored: str, pw: Optional[str]) -> bool:
     """Verify a password against a stored pbkdf2_sha256 hash."""
@@ -1000,14 +1251,15 @@ def verify_password(stored: str, pw: Optional[str]) -> bool:
         return False
     try:
         algo, iter_s, salt_hex, hash_hex = stored.split("$")
-        if algo != 'pbkdf2_sha256':
+        if algo != "pbkdf2_sha256":
             return False
         iterations = int(iter_s)
         salt = binascii.unhexlify(salt_hex)
-        dk = hashlib.pbkdf2_hmac('sha256', pw.encode('utf-8'), salt, iterations)
+        dk = hashlib.pbkdf2_hmac("sha256", pw.encode("utf-8"), salt, iterations)
         return binascii.hexlify(dk).decode() == hash_hex
     except Exception:
         return False
+
 
 @app.post("/api/invites")
 async def api_invites_create(request: Request) -> JSONResponse:
@@ -1030,12 +1282,19 @@ async def api_invites_create(request: Request) -> JSONResponse:
     except Exception:
         max_uses = 1
     # Allow blank album for invites (no album association)
-    if not album_name and SETTINGS.album_name and not album_id and album_name is not None:
+    if (
+        not album_name
+        and SETTINGS.album_name
+        and not album_id
+        and album_name is not None
+    ):
         album_name = SETTINGS.album_name
     # If only album_name provided, resolve or create now to fix to an ID
     resolved_album_id = None
     if not album_id and album_name:
-        resolved_album_id = await get_or_create_album(request=request, album_name_override=album_name)
+        resolved_album_id = await get_or_create_album(
+            request=request, album_name_override=album_name
+        )
     else:
         resolved_album_id = album_id
     # Compute expiry
@@ -1043,13 +1302,22 @@ async def api_invites_create(request: Request) -> JSONResponse:
     if expires_days is not None:
         try:
             days = int(expires_days)
-            expires_at = (datetime.utcnow() + timedelta(days=days)).replace(microsecond=0).isoformat()
+            expires_at = (
+                (datetime.utcnow() + timedelta(days=days))
+                .replace(microsecond=0)
+                .isoformat()
+            )
         except Exception:
             expires_at = None
     # Generate token
     import uuid
+
     token = uuid.uuid4().hex
-    pw_hash = hash_password(invite_password or "") if (invite_password and str(invite_password).strip()) else None
+    pw_hash = (
+        hash_password(invite_password or "")
+        if (invite_password and str(invite_password).strip())
+        else None
+    )
     # Owner info from session
     owner_user_id = str(request.session.get("userId") or "")
     owner_email = str(request.session.get("userEmail") or "")
@@ -1064,12 +1332,33 @@ async def api_invites_create(request: Request) -> JSONResponse:
         if pw_hash:
             cur.execute(
                 "INSERT INTO invites (token, album_id, album_name, max_uses, expires_at, password_hash, owner_user_id, owner_email, owner_name, name) VALUES (?,?,?,?,?,?,?,?,?,?)",
-                (token, resolved_album_id, album_name, max_uses, expires_at, pw_hash, owner_user_id, owner_email, owner_name, default_link_name)
+                (
+                    token,
+                    resolved_album_id,
+                    album_name,
+                    max_uses,
+                    expires_at,
+                    pw_hash,
+                    owner_user_id,
+                    owner_email,
+                    owner_name,
+                    default_link_name,
+                ),
             )
         else:
             cur.execute(
                 "INSERT INTO invites (token, album_id, album_name, max_uses, expires_at, owner_user_id, owner_email, owner_name, name) VALUES (?,?,?,?,?,?,?,?,?)",
-                (token, resolved_album_id, album_name, max_uses, expires_at, owner_user_id, owner_email, owner_name, default_link_name)
+                (
+                    token,
+                    resolved_album_id,
+                    album_name,
+                    max_uses,
+                    expires_at,
+                    owner_user_id,
+                    owner_email,
+                    owner_name,
+                    default_link_name,
+                ),
             )
         conn.commit()
         conn.close()
@@ -1078,21 +1367,28 @@ async def api_invites_create(request: Request) -> JSONResponse:
         return JSONResponse({"error": "db_error"}, status_code=500)
     # Build absolute URL using PUBLIC_BASE_URL if set, else request base
     try:
-        base_url = SETTINGS.public_base_url.strip().rstrip('/') if SETTINGS.public_base_url else str(request.base_url).rstrip('/')
+        base_url = (
+            SETTINGS.public_base_url.strip().rstrip("/")
+            if SETTINGS.public_base_url
+            else str(request.base_url).rstrip("/")
+        )
     except Exception:
-        base_url = str(request.base_url).rstrip('/')
+        base_url = str(request.base_url).rstrip("/")
     absolute = f"{base_url}/invite/{token}"
-    return JSONResponse({
-        "ok": True,
-        "token": token,
-        "url": f"/invite/{token}",
-        "absoluteUrl": absolute,
-        "albumId": resolved_album_id,
-        "albumName": album_name,
-        "maxUses": max_uses,
-        "expiresAt": expires_at,
-        "name": default_link_name
-    })
+    return JSONResponse(
+        {
+            "ok": True,
+            "token": token,
+            "url": f"/invite/{token}",
+            "absoluteUrl": absolute,
+            "albumId": resolved_album_id,
+            "albumName": album_name,
+            "maxUses": max_uses,
+            "expiresAt": expires_at,
+            "name": default_link_name,
+        }
+    )
+
 
 @app.get("/api/invites")
 async def api_invites_list(request: Request) -> JSONResponse:
@@ -1128,13 +1424,14 @@ async def api_invites_list(request: Request) -> JSONResponse:
                 WHERE owner_user_id = ? AND (
                     COALESCE(name,'') LIKE ? OR COALESCE(album_name,'') LIKE ? OR token LIKE ?
                 )
-                ORDER BY """ + sort_sql,
-                (owner_user_id, like, like, like)
+                ORDER BY """
+                + sort_sql,
+                (owner_user_id, like, like, like),
             )
         else:
             cur.execute(
                 f"SELECT token, name, album_id, album_name, max_uses, used_count, expires_at, COALESCE(claimed,0), COALESCE(disabled,0), created_at FROM invites WHERE owner_user_id = ? ORDER BY {sort_sql}",
-                (owner_user_id,)
+                (owner_user_id,),
             )
         rows = cur.fetchall()
         conn.close()
@@ -1143,7 +1440,18 @@ async def api_invites_list(request: Request) -> JSONResponse:
         return JSONResponse({"error": "db_error"}, status_code=500)
     items = []
     now = datetime.utcnow()
-    for (token, name, album_id, album_name, max_uses, used_count, expires_at, claimed, disabled, created_at) in rows:
+    for (
+        token,
+        name,
+        album_id,
+        album_name,
+        max_uses,
+        used_count,
+        expires_at,
+        claimed,
+        disabled,
+        created_at,
+    ) in rows:
         try:
             max_uses_int = int(max_uses) if max_uses is not None else -1
         except Exception:
@@ -1162,7 +1470,9 @@ async def api_invites_list(request: Request) -> JSONResponse:
                 expired = False
         inactive_reason = None
         active = True
-        if (max_uses_int == 1 and claimed) or (remaining is not None and remaining <= 0):
+        if (max_uses_int == 1 and claimed) or (
+            remaining is not None and remaining <= 0
+        ):
             active = False
             inactive_reason = "claimed" if max_uses_int == 1 else "exhausted"
         if expired:
@@ -1174,20 +1484,23 @@ async def api_invites_list(request: Request) -> JSONResponse:
                 inactive_reason = "disabled"
         except Exception:
             pass
-        items.append({
-            "token": token,
-            "name": name,
-            "albumId": album_id,
-            "albumName": album_name,
-            "maxUses": max_uses,
-            "used": used_count or 0,
-            "remaining": remaining,
-            "expiresAt": expires_at,
-            "active": active,
-            "inactiveReason": inactive_reason,
-            "createdAt": created_at,
-        })
+        items.append(
+            {
+                "token": token,
+                "name": name,
+                "albumId": album_id,
+                "albumName": album_name,
+                "maxUses": max_uses,
+                "used": used_count or 0,
+                "remaining": remaining,
+                "expiresAt": expires_at,
+                "active": active,
+                "inactiveReason": inactive_reason,
+                "createdAt": created_at,
+            }
+        )
     return JSONResponse({"items": items})
+
 
 @app.patch("/api/invite/{token}")
 async def api_invite_update(token: str, request: Request) -> JSONResponse:
@@ -1234,7 +1547,11 @@ async def api_invite_update(token: str, request: Request) -> JSONResponse:
         else:
             try:
                 days = int((body or {}).get("expiresDays"))
-                expires_at = (datetime.utcnow() + timedelta(days=days)).replace(microsecond=0).isoformat()
+                expires_at = (
+                    (datetime.utcnow() + timedelta(days=days))
+                    .replace(microsecond=0)
+                    .isoformat()
+                )
             except Exception:
                 expires_at = None
         fields.append("expires_at = ?")
@@ -1255,10 +1572,13 @@ async def api_invite_update(token: str, request: Request) -> JSONResponse:
             cur = conn.cursor()
             cur.execute(
                 f"UPDATE invites SET {', '.join(fields)} WHERE token = ? AND owner_user_id = ?",
-                (*params, token, owner_user_id)
+                (*params, token, owner_user_id),
             )
             if reset_usage:
-                cur.execute("UPDATE invites SET used_count = 0, claimed = 0, claimed_at = NULL, claimed_by_session = NULL WHERE token = ? AND owner_user_id = ?", (token, owner_user_id))
+                cur.execute(
+                    "UPDATE invites SET used_count = 0, claimed = 0, claimed_at = NULL, claimed_by_session = NULL WHERE token = ? AND owner_user_id = ?",
+                    (token, owner_user_id),
+                )
             conn.commit()
             updated = conn.total_changes
             conn.close()
@@ -1270,6 +1590,7 @@ async def api_invite_update(token: str, request: Request) -> JSONResponse:
     if updated == 0:
         return JSONResponse({"ok": False, "updated": 0}, status_code=404)
     return JSONResponse({"ok": True, "updated": updated})
+
 
 @app.post("/api/invites/bulk")
 async def api_invites_bulk(request: Request) -> JSONResponse:
@@ -1293,7 +1614,7 @@ async def api_invites_bulk(request: Request) -> JSONResponse:
         placeholders = ",".join(["?"] * len(tokens))
         cur.execute(
             f"UPDATE invites SET disabled = ? WHERE owner_user_id = ? AND token IN ({placeholders})",
-            (val, owner_user_id, *tokens)
+            (val, owner_user_id, *tokens),
         )
         conn.commit()
         changed = conn.total_changes
@@ -1302,6 +1623,7 @@ async def api_invites_bulk(request: Request) -> JSONResponse:
         logger.exception("Bulk update failed: %s", e)
         return JSONResponse({"error": "db_error"}, status_code=500)
     return JSONResponse({"ok": True, "updated": changed})
+
 
 @app.post("/api/invites/delete")
 async def api_invites_delete(request: Request) -> JSONResponse:
@@ -1325,13 +1647,12 @@ async def api_invites_delete(request: Request) -> JSONResponse:
         placeholders = ",".join(["?"] * len(tokens))
         # Delete upload events first to avoid orphan rows
         cur.execute(
-            f"DELETE FROM upload_events WHERE token IN ({placeholders})",
-            (*tokens,)
+            f"DELETE FROM upload_events WHERE token IN ({placeholders})", (*tokens,)
         )
         # Delete invites scoped to owner
         cur.execute(
             f"DELETE FROM invites WHERE owner_user_id = ? AND token IN ({placeholders})",
-            (owner_user_id, *tokens)
+            (owner_user_id, *tokens),
         )
         conn.commit()
         changed = conn.total_changes
@@ -1340,6 +1661,7 @@ async def api_invites_delete(request: Request) -> JSONResponse:
         logger.exception("Bulk delete failed: %s", e)
         return JSONResponse({"error": "db_error"}, status_code=500)
     return JSONResponse({"ok": True, "deleted": changed})
+
 
 @app.get("/api/invite/{token}/uploads")
 async def api_invite_uploads(token: str, request: Request) -> JSONResponse:
@@ -1351,12 +1673,18 @@ async def api_invite_uploads(token: str, request: Request) -> JSONResponse:
         conn = db.connect()
         cur = conn.cursor()
         # Verify ownership
-        cur.execute("SELECT 1 FROM invites WHERE token = ? AND owner_user_id = ?", (token, owner_user_id))
+        cur.execute(
+            "SELECT 1 FROM invites WHERE token = ? AND owner_user_id = ?",
+            (token, owner_user_id),
+        )
         row = cur.fetchone()
         if not row:
             conn.close()
             return JSONResponse({"error": "forbidden"}, status_code=403)
-        cur.execute("SELECT uploaded_at, ip, user_agent, fingerprint, filename, size, checksum, immich_asset_id FROM upload_events WHERE token = ? ORDER BY uploaded_at DESC LIMIT 500", (token,))
+        cur.execute(
+            "SELECT uploaded_at, ip, user_agent, fingerprint, filename, size, checksum, immich_asset_id FROM upload_events WHERE token = ? ORDER BY uploaded_at DESC LIMIT 500",
+            (token,),
+        )
         rows = cur.fetchall()
         conn.close()
     except Exception as e:
@@ -1364,28 +1692,35 @@ async def api_invite_uploads(token: str, request: Request) -> JSONResponse:
         return JSONResponse({"error": "db_error"}, status_code=500)
     items = []
     for uploaded_at, ip, ua, fp, filename, size, checksum, asset_id in rows:
-        items.append({
-            "uploadedAt": uploaded_at,
-            "ip": ip,
-            "userAgent": ua,
-            "fingerprint": fp,
-            "filename": filename,
-            "size": size,
-            "checksum": checksum,
-            "assetId": asset_id,
-        })
+        items.append(
+            {
+                "uploadedAt": uploaded_at,
+                "ip": ip,
+                "userAgent": ua,
+                "fingerprint": fp,
+                "filename": filename,
+                "size": size,
+                "checksum": checksum,
+                "assetId": asset_id,
+            }
+        )
     return JSONResponse({"items": items})
+
 
 @app.get("/invite/{token}", response_class=HTMLResponse)
 async def invite_page(token: str, request: Request) -> HTMLResponse:
     return FileResponse(os.path.join(FRONTEND_DIR, "invite.html"))
+
 
 @app.get("/api/invite/{token}")
 async def api_invite_info(token: str, request: Request) -> JSONResponse:
     try:
         conn = db.connect()
         cur = conn.cursor()
-        cur.execute("SELECT token, album_id, album_name, max_uses, used_count, expires_at, COALESCE(claimed,0), claimed_at, password_hash, COALESCE(disabled,0), name FROM invites WHERE token = ?", (token,))
+        cur.execute(
+            "SELECT token, album_id, album_name, max_uses, used_count, expires_at, COALESCE(claimed,0), claimed_at, password_hash, COALESCE(disabled,0), name FROM invites WHERE token = ?",
+            (token,),
+        )
         row = cur.fetchone()
         conn.close()
     except Exception as e:
@@ -1393,13 +1728,29 @@ async def api_invite_info(token: str, request: Request) -> JSONResponse:
         return JSONResponse({"error": "db_error"}, status_code=500)
     if not row:
         return JSONResponse({"error": "not_found"}, status_code=404)
-    _, album_id, album_name, max_uses, used_count, expires_at, claimed, claimed_at, password_hash, disabled, link_name = row
+    (
+        _,
+        album_id,
+        album_name,
+        max_uses,
+        used_count,
+        expires_at,
+        claimed,
+        claimed_at,
+        password_hash,
+        disabled,
+        link_name,
+    ) = row
 
     # If we have an album_id but no album_name, try to fetch it from Immich
     if album_id and not album_name:
         try:
             client = app.state.httpx_client
-            r = await client.get(f"{SETTINGS.normalized_base_url}/albums", headers=immich_headers(request), timeout=10.0)
+            r = await client.get(
+                f"{SETTINGS.normalized_base_url}/albums",
+                headers=immich_headers(request),
+                timeout=10.0,
+            )
             if r.status_code == 200:
                 albums = r.json()
                 for album in albums:
@@ -1455,24 +1806,27 @@ async def api_invite_info(token: str, request: Request) -> JSONResponse:
         authorized = ia.get(token, False)
     except Exception:
         pass
-    return JSONResponse({
-        "token": token,
-        "albumId": album_id,
-        "albumName": album_name,
-        "name": link_name,
-        "maxUses": max_uses,
-        "used": used_count or 0,
-        "remaining": remaining,
-        "expiresAt": expires_at,
-        "oneTime": one_time,
-        "claimed": bool(claimed),
-        "claimedAt": claimed_at,
-        "expired": expired,
-        "active": active,
-        "inactiveReason": (None if active else (reason or "inactive")),
-        "passwordRequired": password_required,
-        "authorized": authorized,
-    })
+    return JSONResponse(
+        {
+            "token": token,
+            "albumId": album_id,
+            "albumName": album_name,
+            "name": link_name,
+            "maxUses": max_uses,
+            "used": used_count or 0,
+            "remaining": remaining,
+            "expiresAt": expires_at,
+            "oneTime": one_time,
+            "claimed": bool(claimed),
+            "claimedAt": claimed_at,
+            "expired": expired,
+            "active": active,
+            "inactiveReason": (None if active else (reason or "inactive")),
+            "passwordRequired": password_required,
+            "authorized": authorized,
+        }
+    )
+
 
 @app.post("/api/invite/{token}/auth")
 async def api_invite_auth(token: str, request: Request) -> JSONResponse:
@@ -1507,6 +1861,7 @@ async def api_invite_auth(token: str, request: Request) -> JSONResponse:
     request.session["inviteAuth"] = ia
     return JSONResponse({"ok": True, "authorized": True})
 
+
 @app.get("/api/qr", response_model=None)
 async def api_qr(request: Request):
     """Generate a QR code PNG for a given text (query param 'text')."""
@@ -1517,11 +1872,13 @@ async def api_qr(request: Request):
         logger.warning("qrcode library not installed; cannot generate QR")
         return JSONResponse({"error": "qr_not_available"}, status_code=501)
     import io as _io
+
     img = qrcode.make(text)
     buf = _io.BytesIO()
     img.save(buf, format="PNG")
     buf.seek(0)
     return Response(content=buf.read(), media_type="image/png")
+
 
 # ---------- Platform Cookies API ----------
 
@@ -1532,6 +1889,7 @@ from .cookie_manager import (
     is_cookie_stale,
     PLATFORM_DOMAINS,
 )
+
 
 @app.get("/api/cookies")
 async def api_cookies_list(request: Request) -> JSONResponse:
@@ -1547,6 +1905,7 @@ async def api_cookies_list(request: Request) -> JSONResponse:
             c["cookie_preview"] = c.get("cookie_string", "")
         c["is_stale"] = is_cookie_stale(c.get("updated_at", ""))
     return JSONResponse({"items": cookies, "platforms": list(PLATFORM_DOMAINS.keys())})
+
 
 @app.post("/api/cookies")
 async def api_cookies_upsert(request: Request) -> JSONResponse:
@@ -1564,11 +1923,18 @@ async def api_cookies_upsert(request: Request) -> JSONResponse:
     if not cookie_string:
         return JSONResponse({"error": "missing_cookie_string"}, status_code=400)
     if platform not in PLATFORM_DOMAINS:
-        return JSONResponse({"error": "unsupported_platform", "supported": list(PLATFORM_DOMAINS.keys())}, status_code=400)
+        return JSONResponse(
+            {
+                "error": "unsupported_platform",
+                "supported": list(PLATFORM_DOMAINS.keys()),
+            },
+            status_code=400,
+        )
     success = db_upsert_cookie(SETTINGS.state_db, platform, cookie_string)
     if success:
         return JSONResponse({"ok": True, "platform": platform})
     return JSONResponse({"error": "save_failed"}, status_code=500)
+
 
 @app.delete("/api/cookies/{platform}")
 async def api_cookies_delete(request: Request, platform: str) -> JSONResponse:

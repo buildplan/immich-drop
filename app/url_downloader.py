@@ -3,6 +3,7 @@ URL Downloader module for immich-drop
 Downloads videos/images from supported platforms using gallery-dl and yt-dlp.
 Also supports direct image URL downloads via httpx.
 """
+
 from __future__ import annotations
 
 import os
@@ -43,84 +44,103 @@ class DownloadResult:
 
 # Supported platforms and their URL patterns
 SUPPORTED_PATTERNS = {
-    'tiktok': [
-        r'(?:https?://)?(?:www\.)?tiktok\.com/@[\w.-]+/video/\d+',
-        r'(?:https?://)?(?:vm|vt)\.tiktok\.com/[\w]+',
-        r'(?:https?://)?(?:www\.)?tiktok\.com/t/[\w]+',
+    "tiktok": [
+        r"(?:https?://)?(?:www\.)?tiktok\.com/@[\w.-]+/video/\d+",
+        r"(?:https?://)?(?:vm|vt)\.tiktok\.com/[\w]+",
+        r"(?:https?://)?(?:www\.)?tiktok\.com/t/[\w]+",
     ],
-    'instagram': [
-        r'(?:https?://)?(?:www\.)?instagram\.com/(?:p|reel|reels)/[\w-]+',
-        r'(?:https?://)?(?:www\.)?instagram\.com/stories/[\w.-]+/\d+',
+    "instagram": [
+        r"(?:https?://)?(?:www\.)?instagram\.com/(?:p|reel|reels)/[\w-]+",
+        r"(?:https?://)?(?:www\.)?instagram\.com/stories/[\w.-]+/\d+",
     ],
-    'reddit': [
-        r'(?:https?://)?(?:www\.|old\.)?reddit\.com/r/[\w]+/comments/[\w]+',
-        r'(?:https?://)?(?:www\.)?reddit\.com/r/[\w]+/s/[\w]+',  # Share links
-        r'(?:https?://)?(?:www\.)?redd\.it/[\w]+',
-        r'(?:https?://)?v\.redd\.it/[\w]+',
-        r'(?:https?://)?i\.redd\.it/[\w.]+',
-        r'(?:https?://)?preview\.redd\.it/[\w.?&=%-]+',
-        r'(?:https?://)?(?:i\.)?reddit\.com/[\w/]+',
+    "reddit": [
+        r"(?:https?://)?(?:www\.|old\.)?reddit\.com/r/[\w]+/comments/[\w]+",
+        r"(?:https?://)?(?:www\.)?reddit\.com/r/[\w]+/s/[\w]+",  # Share links
+        r"(?:https?://)?(?:www\.)?redd\.it/[\w]+",
+        r"(?:https?://)?v\.redd\.it/[\w]+",
+        r"(?:https?://)?i\.redd\.it/[\w.]+",
+        r"(?:https?://)?preview\.redd\.it/[\w.?&=%-]+",
+        r"(?:https?://)?(?:i\.)?reddit\.com/[\w/]+",
     ],
-    'youtube': [
-        r'(?:https?://)?(?:www\.)?youtube\.com/(?:watch\?v=|shorts/)[\w-]+',
-        r'(?:https?://)?youtu\.be/[\w-]+',
+    "youtube": [
+        r"(?:https?://)?(?:www\.)?youtube\.com/(?:watch\?v=|shorts/)[\w-]+",
+        r"(?:https?://)?youtu\.be/[\w-]+",
     ],
-    'twitter': [
-        r'(?:https?://)?(?:www\.)?(?:twitter|x)\.com/[\w]+/status/\d+',
+    "twitter": [
+        r"(?:https?://)?(?:www\.)?(?:twitter|x)\.com/[\w]+/status/\d+",
     ],
-    'facebook': [
-        r'(?:https?://)?(?:www\.)?facebook\.com/reel/\d+',
-        r'(?:https?://)?(?:www\.)?facebook\.com/[\w.]+/videos/\d+',
-        r'(?:https?://)?(?:www\.)?facebook\.com/watch/?\?v=\d+',
-        r'(?:https?://)?(?:www\.)?facebook\.com/share/v/[\w]+',
-        r'(?:https?://)?(?:www\.)?facebook\.com/share/r/[\w]+',
-        r'(?:https?://)?fb\.watch/[\w]+',
+    "facebook": [
+        r"(?:https?://)?(?:www\.)?facebook\.com/reel/\d+",
+        r"(?:https?://)?(?:www\.)?facebook\.com/[\w.]+/videos/\d+",
+        r"(?:https?://)?(?:www\.)?facebook\.com/watch/?\?v=\d+",
+        r"(?:https?://)?(?:www\.)?facebook\.com/share/v/[\w]+",
+        r"(?:https?://)?(?:www\.)?facebook\.com/share/r/[\w]+",
+        r"(?:https?://)?fb\.watch/[\w]+",
     ],
-    'flickr': [
-        r'(?:https?://)?(?:www\.)?flickr\.com/photos/[\w@]+/\d+',
+    "flickr": [
+        r"(?:https?://)?(?:www\.)?flickr\.com/photos/[\w@]+/\d+",
     ],
-    'tumblr': [
-        r'(?:https?://)?[\w-]+\.tumblr\.com/post/\d+',
+    "tumblr": [
+        r"(?:https?://)?[\w-]+\.tumblr\.com/post/\d+",
     ],
-    'imgur': [
-        r'(?:https?://)?(?:www\.)?imgur\.com/(?:a|gallery)/[\w]+',
-        r'(?:https?://)?(?:www\.)?imgur\.com/[\w]+',
+    "imgur": [
+        r"(?:https?://)?(?:www\.)?imgur\.com/(?:a|gallery)/[\w]+",
+        r"(?:https?://)?(?:www\.)?imgur\.com/[\w]+",
     ],
-    'artstation': [
-        r'(?:https?://)?(?:www\.)?artstation\.com/artwork/[\w]+',
+    "artstation": [
+        r"(?:https?://)?(?:www\.)?artstation\.com/artwork/[\w]+",
     ],
-    'deviantart': [
-        r'(?:https?://)?(?:www\.)?deviantart\.com/[\w-]+/art/[\w-]+',
+    "deviantart": [
+        r"(?:https?://)?(?:www\.)?deviantart\.com/[\w-]+/art/[\w-]+",
     ],
-    'pixiv': [
-        r'(?:https?://)?(?:www\.)?pixiv\.net/(?:en/)?artworks/\d+',
+    "pixiv": [
+        r"(?:https?://)?(?:www\.)?pixiv\.net/(?:en/)?artworks/\d+",
     ],
-    'danbooru': [
-        r'(?:https?://)?danbooru\.donmai\.us/posts/\d+',
+    "danbooru": [
+        r"(?:https?://)?danbooru\.donmai\.us/posts/\d+",
     ],
-    'bluesky': [
-        r'(?:https?://)?bsky\.app/profile/[\w.:]+/post/[\w]+',
+    "bluesky": [
+        r"(?:https?://)?bsky\.app/profile/[\w.:]+/post/[\w]+",
     ],
-    'pinterest': [
-        r'(?:https?://)?(?:www\.)?pinterest\.com/pin/[\d]+',
-        r'(?:https?://)?pin\.it/[\w]+',
+    "pinterest": [
+        r"(?:https?://)?(?:www\.)?pinterest\.com/pin/[\d]+",
+        r"(?:https?://)?pin\.it/[\w]+",
     ],
 }
 
 # Platforms where gallery-dl excels (image-focused extraction)
 GALLERY_DL_PLATFORMS = {
-    "reddit", "instagram", "twitter", "flickr", "tumblr",
-    "imgur", "artstation", "deviantart", "pixiv", "danbooru",
-    "bluesky", "pinterest",
+    "reddit",
+    "instagram",
+    "twitter",
+    "flickr",
+    "tumblr",
+    "imgur",
+    "artstation",
+    "deviantart",
+    "pixiv",
+    "danbooru",
+    "bluesky",
+    "pinterest",
 }
 
 # Platforms where yt-dlp is the better tool (video-focused extraction)
 YTDLP_PLATFORMS = {"youtube", "tiktok", "facebook"}
 
 
-DIRECT_IMAGE_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.gif', '.webp', '.avif', '.heic', '.bmp', '.tiff'}
+DIRECT_IMAGE_EXTENSIONS = {
+    ".jpg",
+    ".jpeg",
+    ".png",
+    ".gif",
+    ".webp",
+    ".avif",
+    ".heic",
+    ".bmp",
+    ".tiff",
+}
 
-DIRECT_IMAGE_DOMAINS = {'i.redd.it', 'i.imgur.com', 'pbs.twimg.com', 'preview.redd.it'}
+DIRECT_IMAGE_DOMAINS = {"i.redd.it", "i.imgur.com", "pbs.twimg.com", "preview.redd.it"}
 
 MAX_DIRECT_IMAGE_SIZE = 100 * 1024 * 1024  # 100MB
 
@@ -129,9 +149,13 @@ MAX_DIRECT_IMAGE_SIZE = 100 * 1024 * 1024  # 100MB
 # is NOT an access gate, just feature dispatch. URLs that don't match still
 # flow through to yt-dlp / gallery-dl / direct extraction like any other URL.
 REDDIT_HOSTS = {
-    "reddit.com", "www.reddit.com",
-    "old.reddit.com", "np.reddit.com",
-    "i.redd.it", "v.redd.it", "redd.it",
+    "reddit.com",
+    "www.reddit.com",
+    "old.reddit.com",
+    "np.reddit.com",
+    "i.redd.it",
+    "v.redd.it",
+    "redd.it",
 }
 
 
@@ -143,7 +167,7 @@ def _is_reddit_host(hostname: Optional[str]) -> bool:
 # download. Anything outside this set is clamped to .jpg before joining the
 # path. Derived from DIRECT_IMAGE_EXTENSIONS plus video extensions yt-dlp may
 # legitimately produce.
-SAFE_DIRECT_EXTS = DIRECT_IMAGE_EXTENSIONS | {'.mp4', '.mov', '.webm', '.mkv'}
+SAFE_DIRECT_EXTS = DIRECT_IMAGE_EXTENSIONS | {".mp4", ".mov", ".webm", ".mkv"}
 
 
 def _is_private_ip(addr: str) -> bool:
@@ -176,14 +200,18 @@ def _validate_url_target(url: str) -> Optional[str]:
         return f"Blocked URL scheme: {scheme}"
 
     try:
-        addrinfo = socket.getaddrinfo(hostname, None, socket.AF_UNSPEC, socket.SOCK_STREAM)
+        addrinfo = socket.getaddrinfo(
+            hostname, None, socket.AF_UNSPEC, socket.SOCK_STREAM
+        )
     except socket.gaierror:
         return f"Cannot resolve hostname: {hostname}"
 
     for family, _type, _proto, _canonname, sockaddr in addrinfo:
         ip_str = sockaddr[0]
         if _is_private_ip(ip_str):
-            return f"Blocked request to private/reserved address: {hostname} -> {ip_str}"
+            return (
+                f"Blocked request to private/reserved address: {hostname} -> {ip_str}"
+            )
 
     return None
 
@@ -267,7 +295,9 @@ async def download_direct_image(
                 if redirect_err:
                     logger.warning(
                         "Redirect blocked (SSRF): %s -> %s -- %s",
-                        response.url, location, redirect_err,
+                        response.url,
+                        location,
+                        redirect_err,
                     )
                     raise httpx.TooManyRedirects(
                         f"Redirect blocked: {redirect_err}",
@@ -293,10 +323,13 @@ async def download_direct_image(
                 else:
                     logger.debug(
                         "HEAD request returned %d for %s, proceeding with GET",
-                        head_resp.status_code, url,
+                        head_resp.status_code,
+                        url,
                     )
             except httpx.HTTPError as e:
-                logger.debug("HEAD request failed for %s: %s, proceeding with GET", url, e)
+                logger.debug(
+                    "HEAD request failed for %s: %s, proceeding with GET", url, e
+                )
 
             # Download the image
             resp = await client.get(url, headers=headers)
@@ -329,7 +362,7 @@ async def download_direct_image(
                             mime_to_ext[v] = k
                     ext = mime_to_ext.get(ct, ".jpg")
 
-                content_type = CONTENT_TYPE_MAP.get(ext, 'application/octet-stream')
+                content_type = CONTENT_TYPE_MAP.get(ext, "application/octet-stream")
 
             # Clamp ext to the safe allowlist before composing a filename.
             # This forecloses any path-traversal dataflow from URL/Content-Type.
@@ -346,7 +379,9 @@ async def download_direct_image(
 
             logger.info(
                 "Direct image downloaded: %s (size=%d bytes, type=%s)",
-                filename, len(data), content_type,
+                filename,
+                len(data),
+                content_type,
             )
 
             return DownloadResult(
@@ -381,20 +416,20 @@ _DEFAULT_GALLERY_DL_TIMEOUT = 300
 
 # Content type map shared across download methods
 CONTENT_TYPE_MAP = {
-    '.mp4': 'video/mp4',
-    '.webm': 'video/webm',
-    '.mkv': 'video/x-matroska',
-    '.mov': 'video/quicktime',
-    '.avi': 'video/x-msvideo',
-    '.jpg': 'image/jpeg',
-    '.jpeg': 'image/jpeg',
-    '.png': 'image/png',
-    '.gif': 'image/gif',
-    '.webp': 'image/webp',
-    '.avif': 'image/avif',
-    '.heic': 'image/heic',
-    '.bmp': 'image/bmp',
-    '.tiff': 'image/tiff',
+    ".mp4": "video/mp4",
+    ".webm": "video/webm",
+    ".mkv": "video/x-matroska",
+    ".mov": "video/quicktime",
+    ".avi": "video/x-msvideo",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".png": "image/png",
+    ".gif": "image/gif",
+    ".webp": "image/webp",
+    ".avif": "image/avif",
+    ".heic": "image/heic",
+    ".bmp": "image/bmp",
+    ".tiff": "image/tiff",
 }
 
 
@@ -415,8 +450,10 @@ async def extract_via_gallery_dl(
         "gallery-dl",
         "--no-mtime",
         "--write-metadata",
-        "-d", output_dir,
-        "--filename", "{filename}.{extension}",
+        "-d",
+        output_dir,
+        "--filename",
+        "{filename}.{extension}",
     ]
 
     # Randomized delays to avoid rate limiting on all platforms
@@ -441,7 +478,9 @@ async def extract_via_gallery_dl(
             start_new_session=True,
         )
 
-        timeout = settings.gallery_dl_timeout if settings else _DEFAULT_GALLERY_DL_TIMEOUT
+        timeout = (
+            settings.gallery_dl_timeout if settings else _DEFAULT_GALLERY_DL_TIMEOUT
+        )
         try:
             stdout, stderr = await asyncio.wait_for(
                 process.communicate(),
@@ -465,13 +504,15 @@ async def extract_via_gallery_dl(
         if process.returncode != 0:
             logger.info(
                 "gallery-dl failed (exit %d) for %s, falling back to yt-dlp",
-                process.returncode, url,
+                process.returncode,
+                url,
             )
             return None
 
         # Collect downloaded files (skip .json sidecar metadata files)
         downloaded = [
-            p for p in Path(output_dir).rglob("*")
+            p
+            for p in Path(output_dir).rglob("*")
             if p.is_file() and p.suffix != ".json"
         ]
 
@@ -488,12 +529,23 @@ async def extract_via_gallery_dl(
                 try:
                     with open(sidecar, "r") as f:
                         sidecar_data = json.load(f)
-                    metadata.update({
-                        k: sidecar_data[k]
-                        for k in ("category", "subcategory", "filename", "extension",
-                                  "date", "description", "title", "author", "username")
-                        if k in sidecar_data
-                    })
+                    metadata.update(
+                        {
+                            k: sidecar_data[k]
+                            for k in (
+                                "category",
+                                "subcategory",
+                                "filename",
+                                "extension",
+                                "date",
+                                "description",
+                                "title",
+                                "author",
+                                "username",
+                            )
+                            if k in sidecar_data
+                        }
+                    )
                 except (json.JSONDecodeError, OSError) as e:
                     logger.debug("Could not read gallery-dl sidecar %s: %s", sidecar, e)
 
@@ -508,16 +560,20 @@ async def extract_via_gallery_dl(
                     filepath.suffix.lower(), "application/octet-stream"
                 )
 
-            results.append(DownloadResult(
-                success=True,
-                filepath=str(filepath),
-                filename=filepath.name,
-                content_type=content_type,
-                metadata=metadata,
-            ))
+            results.append(
+                DownloadResult(
+                    success=True,
+                    filepath=str(filepath),
+                    filename=filepath.name,
+                    content_type=content_type,
+                    metadata=metadata,
+                )
+            )
 
         logger.info(
-            "gallery-dl extracted %d file(s) from %s", len(results), url,
+            "gallery-dl extracted %d file(s) from %s",
+            len(results),
+            url,
         )
         return results
 
@@ -554,7 +610,8 @@ async def download_from_url(
         "--no-warnings",
         "--quiet",
         "--print-json",  # Output JSON metadata
-        "-o", output_template,
+        "-o",
+        output_template,
         "--no-mtime",  # Don't use server mtime
     ]
 
@@ -563,33 +620,53 @@ async def download_from_url(
         cmd.extend(["--cookies", cookies_file])
 
     # Platform-specific options
-    if platform == 'tiktok':
+    if platform == "tiktok":
         # Download without watermark when possible
-        cmd.extend([
-            "--format", "best",
-        ])
-    elif platform == 'instagram':
-        cmd.extend([
-            "--format", "best",
-        ])
-    elif platform == 'reddit':
-        cmd.extend([
-            "--format", "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best",
-        ])
-    elif platform == 'youtube':
-        cmd.extend([
-            "--format", "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best",
-        ])
-    elif platform == 'twitter':
-        cmd.extend([
-            "--format", "best",
-        ])
-    elif platform == 'facebook':
-        cmd.extend([
-            "--format", "bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo+bestaudio/best[ext=mp4]/best",
-            "--merge-output-format", "mp4",
-            "--impersonate", "chrome",
-        ])
+        cmd.extend(
+            [
+                "--format",
+                "best",
+            ]
+        )
+    elif platform == "instagram":
+        cmd.extend(
+            [
+                "--format",
+                "best",
+            ]
+        )
+    elif platform == "reddit":
+        cmd.extend(
+            [
+                "--format",
+                "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best",
+            ]
+        )
+    elif platform == "youtube":
+        cmd.extend(
+            [
+                "--format",
+                "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best",
+            ]
+        )
+    elif platform == "twitter":
+        cmd.extend(
+            [
+                "--format",
+                "best",
+            ]
+        )
+    elif platform == "facebook":
+        cmd.extend(
+            [
+                "--format",
+                "bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo+bestaudio/best[ext=mp4]/best",
+                "--merge-output-format",
+                "mp4",
+                "--impersonate",
+                "chrome",
+            ]
+        )
 
     cmd.append(url)
 
@@ -631,17 +708,14 @@ async def download_from_url(
             # reddit media?url= fallback in download_from_url_multi).
             if owned_output_dir and output_dir.startswith(tempfile.gettempdir()):
                 shutil.rmtree(output_dir, ignore_errors=True)
-            return DownloadResult(
-                success=False,
-                error=f"Download failed: {error_msg}"
-            )
+            return DownloadResult(success=False, error=f"Download failed: {error_msg}")
 
         # Parse JSON output for metadata
         metadata = {}
         if stdout:
             try:
                 # yt-dlp outputs one JSON object per line
-                for line in stdout.decode().strip().split('\n'):
+                for line in stdout.decode().strip().split("\n"):
                     if line:
                         metadata = json.loads(line)
                         break
@@ -661,17 +735,16 @@ async def download_from_url(
         downloaded_files = list(Path(output_dir).glob("*"))
         if not downloaded_files:
             logger.error("yt-dlp returned 0 but no file found in %s", output_dir)
-            return DownloadResult(
-                success=False,
-                error="No file was downloaded"
-            )
+            return DownloadResult(success=False, error="No file was downloaded")
 
         filepath = str(downloaded_files[0])
         filename = downloaded_files[0].name
         file_size = downloaded_files[0].stat().st_size
         logger.info(
             "Downloaded file: %s (size=%d bytes, ext=%s)",
-            filename, file_size, downloaded_files[0].suffix,
+            filename,
+            file_size,
+            downloaded_files[0].suffix,
         )
         if file_size < 10000:
             logger.warning(
@@ -681,20 +754,22 @@ async def download_from_url(
 
         # Determine content type
         ext = downloaded_files[0].suffix.lower()
-        content_type = CONTENT_TYPE_MAP.get(ext, 'application/octet-stream')
+        content_type = CONTENT_TYPE_MAP.get(ext, "application/octet-stream")
 
         # Generate a better filename using metadata if available
         if metadata:
-            uploader = metadata.get('uploader', metadata.get('channel', 'unknown'))
-            title = metadata.get('title', metadata.get('description', ''))[:50]
-            video_id = metadata.get('id', downloaded_files[0].stem)
+            uploader = metadata.get("uploader", metadata.get("channel", "unknown"))
+            title = metadata.get("title", metadata.get("description", ""))[:50]
+            video_id = metadata.get("id", downloaded_files[0].stem)
 
             # Clean filename
-            safe_title = re.sub(r'[^\w\s-]', '', title).strip()[:30]
-            safe_uploader = re.sub(r'[^\w\s-]', '', uploader).strip()[:20]
+            safe_title = re.sub(r"[^\w\s-]", "", title).strip()[:30]
+            safe_uploader = re.sub(r"[^\w\s-]", "", uploader).strip()[:20]
 
             if safe_title:
-                new_filename = f"{platform}_{safe_uploader}_{safe_title}_{video_id}{ext}"
+                new_filename = (
+                    f"{platform}_{safe_uploader}_{safe_title}_{video_id}{ext}"
+                )
             else:
                 new_filename = f"{platform}_{safe_uploader}_{video_id}{ext}"
 
@@ -715,13 +790,10 @@ async def download_from_url(
     except FileNotFoundError:
         return DownloadResult(
             success=False,
-            error="yt-dlp is not installed. Install with: pip install yt-dlp"
+            error="yt-dlp is not installed. Install with: pip install yt-dlp",
         )
     except Exception as e:
-        return DownloadResult(
-            success=False,
-            error=f"Download error: {str(e)}"
-        )
+        return DownloadResult(success=False, error=f"Download error: {str(e)}")
 
 
 async def download_multiple_urls(
@@ -739,7 +811,9 @@ async def download_multiple_urls(
 
     async def _download_with_sem(url: str, sub_dir: str) -> List[DownloadResult]:
         async with sem:
-            return await download_from_url_multi(url, sub_dir, cookies_file, settings=settings)
+            return await download_from_url_multi(
+                url, sub_dir, cookies_file, settings=settings
+            )
 
     tasks = []
     for i, url in enumerate(urls):
@@ -782,9 +856,15 @@ async def download_from_url_multi(
                 # static analyzers at the HEAD call site.
                 safe_url = None
                 try:
-                    if (parsed.scheme or "").lower() in ("http", "https") and parsed.hostname:
+                    if (parsed.scheme or "").lower() in (
+                        "http",
+                        "https",
+                    ) and parsed.hostname:
                         addrs = socket.getaddrinfo(
-                            parsed.hostname, None, socket.AF_UNSPEC, socket.SOCK_STREAM,
+                            parsed.hostname,
+                            None,
+                            socket.AF_UNSPEC,
+                            socket.SOCK_STREAM,
                         )
                         if all(
                             not ipaddress.ip_address(sa[0]).is_private
@@ -800,6 +880,7 @@ async def download_from_url_multi(
                     logger.warning("Reddit share-link HEAD blocked (SSRF): %s", url)
 
                 if safe_url is not None:
+
                     async def _ssrf_check_redirect(response):
                         if response.is_redirect:
                             location = response.headers.get("location", "")
@@ -808,7 +889,8 @@ async def download_from_url_multi(
                                 if err:
                                     raise httpx.HTTPStatusError(
                                         f"Redirect blocked (SSRF): {err}",
-                                        request=response.request, response=response,
+                                        request=response.request,
+                                        response=response,
                                     )
 
                     async with httpx.AsyncClient(
@@ -816,14 +898,24 @@ async def download_from_url_multi(
                         timeout=15.0,
                         event_hooks={"response": [_ssrf_check_redirect]},
                     ) as client:
-                        head_resp = await client.head(safe_url, headers={"User-Agent": BROWSER_USER_AGENT})
+                        head_resp = await client.head(
+                            safe_url, headers={"User-Agent": BROWSER_USER_AGENT}
+                        )
                         resolved = str(head_resp.url)
-                        if not resolved or resolved == safe_url or "/s/" in urlparse(resolved).path:
-                            return [DownloadResult(
-                                success=False,
-                                error=f"Reddit share link did not resolve to a post: {safe_url}",
-                            )]
-                        logger.info("Resolved Reddit share link: %s -> %s", safe_url, resolved)
+                        if (
+                            not resolved
+                            or resolved == safe_url
+                            or "/s/" in urlparse(resolved).path
+                        ):
+                            return [
+                                DownloadResult(
+                                    success=False,
+                                    error=f"Reddit share link did not resolve to a post: {safe_url}",
+                                )
+                            ]
+                        logger.info(
+                            "Resolved Reddit share link: %s -> %s", safe_url, resolved
+                        )
                         url = resolved
                         parsed = urlparse(url)
 
@@ -832,7 +924,10 @@ async def download_from_url_multi(
                 params = parse_qs(parsed.query)
                 if "url" in params:
                     embedded_url = unquote(params["url"][0])
-                    logger.info("Extracted embedded URL from Reddit media redirect: %s", embedded_url)
+                    logger.info(
+                        "Extracted embedded URL from Reddit media redirect: %s",
+                        embedded_url,
+                    )
                     url = embedded_url
     except Exception as e:
         logger.debug("Reddit URL resolution failed for %s: %s", url, e)
@@ -846,26 +941,38 @@ async def download_from_url_multi(
     platform = identify_platform(url)
 
     # 2. gallery-dl for image-heavy platforms (and any unrecognized-but-supported)
-    if platform in GALLERY_DL_PLATFORMS or (platform and platform not in YTDLP_PLATFORMS):
+    if platform in GALLERY_DL_PLATFORMS or (
+        platform and platform not in YTDLP_PLATFORMS
+    ):
         results = await extract_via_gallery_dl(
-            url, output_dir, cookies_file, platform=platform, settings=settings,
+            url,
+            output_dir,
+            cookies_file,
+            platform=platform,
+            settings=settings,
         )
         if results:
             return results
 
         # Block yt-dlp fallback for Instagram to avoid double-scraper detection
-        if platform == "instagram" and not (settings and settings.instagram_ytdlp_fallback):
+        if platform == "instagram" and not (
+            settings and settings.instagram_ytdlp_fallback
+        ):
             logger.warning(
-                "gallery-dl failed for Instagram URL %s; yt-dlp fallback disabled", url,
+                "gallery-dl failed for Instagram URL %s; yt-dlp fallback disabled",
+                url,
             )
-            return [DownloadResult(
-                success=False,
-                error="Instagram download failed. gallery-dl could not extract media. "
-                      "Check that your Instagram cookies are fresh and valid.",
-            )]
+            return [
+                DownloadResult(
+                    success=False,
+                    error="Instagram download failed. gallery-dl could not extract media. "
+                    "Check that your Instagram cookies are fresh and valid.",
+                )
+            ]
 
         logger.info(
-            "gallery-dl returned no results for %s, falling back to yt-dlp", url,
+            "gallery-dl returned no results for %s, falling back to yt-dlp",
+            url,
         )
 
     # 3. yt-dlp fallback for video platforms and gallery-dl failures
@@ -873,10 +980,15 @@ async def download_from_url_multi(
 
     # If yt-dlp failed on a reddit.com/media?url= redirect, extract the embedded image URL
     if not result.success and result.error and "reddit.com/media?url=" in result.error:
-        match = re.search(r'reddit\.com/media\?url=(https?%3A%2F%2F[^\s"\']+)', result.error)
+        match = re.search(
+            r'reddit\.com/media\?url=(https?%3A%2F%2F[^\s"\']+)', result.error
+        )
         if match:
             embedded_url = unquote(match.group(1))
-            logger.info("Extracting embedded image URL from yt-dlp Reddit media error: %s", embedded_url)
+            logger.info(
+                "Extracting embedded image URL from yt-dlp Reddit media error: %s",
+                embedded_url,
+            )
             os.makedirs(output_dir, exist_ok=True)
             result = await download_direct_image(embedded_url, output_dir)
 
@@ -889,14 +1001,22 @@ async def download_from_url_multi(
 
     # Final fallback: if we haven't already, try gallery-dl for unknown URLs
     if not result.success and platform is None:
-        logger.info("yt-dlp failed for unknown URL %s; trying gallery-dl as last resort", url)
+        logger.info(
+            "yt-dlp failed for unknown URL %s; trying gallery-dl as last resort", url
+        )
         gdl_results = await extract_via_gallery_dl(
-            url, output_dir, cookies_file, platform=None, settings=settings,
+            url,
+            output_dir,
+            cookies_file,
+            platform=None,
+            settings=settings,
         )
         if gdl_results:
             return gdl_results
         logger.warning(
-            "Both yt-dlp and gallery-dl failed for %s: %s", url, result.error,
+            "Both yt-dlp and gallery-dl failed for %s: %s",
+            url,
+            result.error,
         )
 
     return [result]

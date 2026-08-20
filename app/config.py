@@ -13,6 +13,7 @@ from dotenv import load_dotenv
 @dataclass
 class Settings:
     """App settings loaded from environment variables (.env)."""
+
     immich_base_url: str
     immich_api_key: str
     album_name: str = ""
@@ -29,11 +30,14 @@ class Settings:
     download_concurrency: int = 1
     instagram_ytdlp_fallback: bool = False
     social_media_uploads: bool = True
+    test_connection_enabled: bool = True
+    test_connection_show_hostname: bool = True
 
     @property
     def normalized_base_url(self) -> str:
         """Return the base URL without a trailing slash for clean joining and display."""
         return self.immich_base_url.rstrip("/")
+
 
 def load_settings() -> Settings:
     """Load settings from .env, applying defaults when absent."""
@@ -45,16 +49,20 @@ def load_settings() -> Settings:
     base = os.getenv("IMMICH_BASE_URL", "http://127.0.0.1:2283/api")
     api_key = os.getenv("IMMICH_API_KEY", "")
     album_name = os.getenv("IMMICH_ALBUM_NAME", "")
+
     # Safe defaults: disable public uploader and invites unless explicitly enabled
     def as_bool(v: str, default: bool = False) -> bool:
         if v is None:
             return default
-        return str(v).strip().lower() in {"1","true","yes","on"}
+        return str(v).strip().lower() in {"1", "true", "yes", "on"}
+
     public_upload = as_bool(os.getenv("PUBLIC_UPLOAD_PAGE_ENABLED", "false"), False)
     state_db = os.getenv("STATE_DB", "/data/state.db")
     session_secret = os.getenv("SESSION_SECRET") or secrets.token_hex(32)
     log_level = os.getenv("LOG_LEVEL", "INFO").upper()
-    chunked_uploads_enabled = as_bool(os.getenv("CHUNKED_UPLOADS_ENABLED", "false"), False)
+    chunked_uploads_enabled = as_bool(
+        os.getenv("CHUNKED_UPLOADS_ENABLED", "false"), False
+    )
     try:
         chunk_size_mb = int(os.getenv("CHUNK_SIZE_MB", "95"))
     except ValueError:
@@ -69,8 +77,19 @@ def load_settings() -> Settings:
         download_concurrency = int(os.getenv("DOWNLOAD_CONCURRENCY", "1"))
     except ValueError:
         download_concurrency = 1
-    instagram_ytdlp_fallback = as_bool(os.getenv("INSTAGRAM_YTDLP_FALLBACK", "false"), False)
-    social_media_uploads = as_bool(os.getenv("SOCIAL_MEDIA_UPLOADS_ENABLED", "true"), True)
+    instagram_ytdlp_fallback = as_bool(
+        os.getenv("INSTAGRAM_YTDLP_FALLBACK", "false"), False
+    )
+    social_media_uploads = as_bool(
+        os.getenv("SOCIAL_MEDIA_UPLOADS_ENABLED", "true"), True
+    )
+    test_connection_enabled = as_bool(
+        os.getenv("TEST_CONNECTION_ENABLED", "true"), True
+    )
+    test_connection_show_hostname = as_bool(
+        os.getenv("TEST_CONNECTION_SHOW_HOSTNAME", "true"), True
+    )
+
     return Settings(
         immich_base_url=base,
         immich_api_key=api_key,
@@ -88,4 +107,6 @@ def load_settings() -> Settings:
         download_concurrency=download_concurrency,
         instagram_ytdlp_fallback=instagram_ytdlp_fallback,
         social_media_uploads=social_media_uploads,
+        test_connection_enabled=test_connection_enabled,
+        test_connection_show_hostname=test_connection_show_hostname,
     )

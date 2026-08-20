@@ -4,6 +4,7 @@ Cookie Manager for authenticated downloads (yt-dlp and gallery-dl).
 Handles parsing raw cookie strings from browser DevTools and converting
 them to Netscape cookie file format for yt-dlp and gallery-dl consumption.
 """
+
 import os
 import sqlite3
 import logging
@@ -228,7 +229,7 @@ def get_cookie_file_for_platform(platform: str, state_db: str) -> Optional[str]:
         cur = conn.cursor()
         cur.execute(
             "SELECT cookie_string, updated_at FROM platform_cookies WHERE platform = ?",
-            (platform,)
+            (platform,),
         )
         row = cur.fetchone()
         conn.close()
@@ -243,7 +244,8 @@ def get_cookie_file_for_platform(platform: str, state_db: str) -> Optional[str]:
             logger.warning(
                 "Cookies for %s may be expired (last updated: %s). "
                 "Re-export from your browser if downloads fail.",
-                platform, updated_at,
+                platform,
+                updated_at,
             )
 
         filepath = write_cookie_file(platform, cookie_string)
@@ -257,6 +259,7 @@ def get_cookie_file_for_platform(platform: str, state_db: str) -> Optional[str]:
 
 
 # Database operations for cookie CRUD
+
 
 def db_list_cookies(state_db: str) -> list[dict]:
     """List all platform cookies."""
@@ -290,7 +293,7 @@ def db_upsert_cookie(state_db: str, platform: str, cookie_string: str) -> bool:
                 cookie_string = excluded.cookie_string,
                 updated_at = CURRENT_TIMESTAMP
             """,
-            (platform, cookie_string)
+            (platform, cookie_string),
         )
         conn.commit()
         conn.close()
@@ -311,10 +314,7 @@ def db_delete_cookie(state_db: str, platform: str) -> bool:
     try:
         conn = sqlite3.connect(state_db)
         cur = conn.cursor()
-        cur.execute(
-            "DELETE FROM platform_cookies WHERE platform = ?",
-            (platform,)
-        )
+        cur.execute("DELETE FROM platform_cookies WHERE platform = ?", (platform,))
         deleted = cur.rowcount > 0
         conn.commit()
         conn.close()

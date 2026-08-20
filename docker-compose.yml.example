@@ -28,6 +28,9 @@ services:
       DOWNLOAD_CONCURRENCY: 1
       INSTAGRAM_YTDLP_FALLBACK: false
 
+      TEST_CONNECTION_ENABLED: ${TEST_CONNECTION_ENABLED:-true}
+      TEST_CONNECTION_SHOW_HOSTNAME: ${TEST_CONNECTION_SHOW_HOSTNAME:-true}
+
 
     volumes:
       - immich_drop_data:/data
