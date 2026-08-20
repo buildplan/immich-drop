@@ -3,7 +3,16 @@ API Routes for immich-drop extensions
 - URL download and upload to Immich
 - Batch upload for iOS Shortcuts
 """
-from fastapi import APIRouter, HTTPException, UploadFile, File, Form, BackgroundTasks, Request
+
+from fastapi import (
+    APIRouter,
+    HTTPException,
+    UploadFile,
+    File,
+    Form,
+    BackgroundTasks,
+    Request,
+)
 from fastapi.responses import JSONResponse
 from typing import List, Optional
 from pydantic import BaseModel
@@ -39,6 +48,7 @@ router = APIRouter(prefix="/api", tags=["api"])
 # Request/Response Models
 # ============================================================================
 
+
 class UrlUploadRequest(BaseModel):
     url: str
     album_name: Optional[str] = None
@@ -51,6 +61,7 @@ class UrlBatchUploadRequest(BaseModel):
 
 class Base64UploadRequest(BaseModel):
     """Request model for base64-encoded file upload (iOS Shortcuts compatible)"""
+
     data: str  # base64-encoded file content
     filename: Optional[str] = None
     album_name: Optional[str] = None
@@ -94,7 +105,9 @@ class JobResponse(BaseModel):
 class JobStatusResponse(BaseModel):
     job_id: str
     status: str
-    done: str = "0"  # "0" = in progress, "1" = completed, "2" = failed (string for iOS Shortcuts compatibility)
+    done: str = (
+        "0"  # "0" = in progress, "1" = completed, "2" = failed (string for iOS Shortcuts compatibility)
+    )
     created_at: float
     result: Optional[dict] = None
     error: Optional[str] = None
@@ -103,6 +116,7 @@ class JobStatusResponse(BaseModel):
 # ============================================================================
 # Helper Functions
 # ============================================================================
+
 
 async def upload_to_immich(
     file_content: bytes,
@@ -137,7 +151,11 @@ async def upload_to_immich(
     return UploadResult(
         filename=filename,
         status="error",
-        error=f"Immich returned {outcome.status_code}: {outcome.error}" if outcome.status_code else (outcome.error or "upload failed"),
+        error=(
+            f"Immich returned {outcome.status_code}: {outcome.error}"
+            if outcome.status_code
+            else (outcome.error or "upload failed")
+        ),
     )
 
 
@@ -162,6 +180,7 @@ async def add_asset_to_album(
 # ============================================================================
 # API Endpoints
 # ============================================================================
+
 
 def create_api_routes(config):
     """Factory function to create routes with config injection"""
@@ -199,13 +218,19 @@ def create_api_routes(config):
         direct_image = is_direct_image_url(url)
         logger.info(
             "URL upload request: platform=%s direct_image=%s url=%s",
-            platform or "generic", direct_image, url,
+            platform or "generic",
+            direct_image,
+            url,
         )
 
         job = create_job(url, url_request.album_name)
         httpx_client = request.app.state.httpx_client
 
-        asyncio.create_task(_process_url_job(job.id, url, url_request.album_name, platform, httpx_client))
+        asyncio.create_task(
+            _process_url_job(
+                job.id, url, url_request.album_name, platform, httpx_client
+            )
+        )
 
         return JobResponse(job_id=job.id, status=job.status)
 
@@ -220,12 +245,20 @@ def create_api_routes(config):
         try:
             update_job(job_id, status="downloading")
 
-            cookies_file = get_cookie_file_for_platform(platform, config.state_db) if platform else None
-            download_results = await download_from_url_multi(url, cookies_file=cookies_file, settings=config)
+            cookies_file = (
+                get_cookie_file_for_platform(platform, config.state_db)
+                if platform
+                else None
+            )
+            download_results = await download_from_url_multi(
+                url, cookies_file=cookies_file, settings=config
+            )
 
             successful_downloads = [r for r in download_results if r.success]
             if not successful_downloads:
-                first_error = download_results[0].error if download_results else "No media found"
+                first_error = (
+                    download_results[0].error if download_results else "No media found"
+                )
                 logger.error("Download failed for %s: %s", url, first_error)
                 update_job(job_id, status="failed", error=first_error)
                 return
@@ -253,7 +286,9 @@ def create_api_routes(config):
                     if download_result.metadata:
                         timestamp = download_result.metadata.get("timestamp")
                         if timestamp:
-                            file_created_at = datetime.fromtimestamp(timestamp, tz=timezone.utc)
+                            file_created_at = datetime.fromtimestamp(
+                                timestamp, tz=timezone.utc
+                            )
 
                     upload_result = await upload_to_immich(
                         file_content=file_content,
@@ -265,9 +300,15 @@ def create_api_routes(config):
                     )
                     upload_result.platform = source_label
 
-                    target_album = album_name or getattr(config, 'album_name', None)
-                    if target_album and upload_result.asset_id and upload_result.status == "success":
-                        await add_asset_to_album(upload_result.asset_id, target_album, config, httpx_client)
+                    target_album = album_name or getattr(config, "album_name", None)
+                    if (
+                        target_album
+                        and upload_result.asset_id
+                        and upload_result.status == "success"
+                    ):
+                        await add_asset_to_album(
+                            upload_result.asset_id, target_album, config, httpx_client
+                        )
 
                     if upload_result.status == "success":
                         total_uploaded += 1
@@ -280,7 +321,9 @@ def create_api_routes(config):
                 if total_uploaded > 1:
                     logger.info(
                         "Gallery upload complete: %d/%d items uploaded for %s",
-                        total_uploaded, len(successful_downloads), url,
+                        total_uploaded,
+                        len(successful_downloads),
+                        url,
                     )
 
                 response = UrlUploadResponse(
@@ -345,24 +388,32 @@ def create_api_routes(config):
         cookies_file = None
         unique_platforms = set(p for p in platforms if p is not None)
         if len(unique_platforms) == 1:
-            cookies_file = get_cookie_file_for_platform(list(unique_platforms)[0], config.state_db)
+            cookies_file = get_cookie_file_for_platform(
+                list(unique_platforms)[0], config.state_db
+            )
 
         results = []
-        download_results = await download_multiple_urls(urls, cookies_file=cookies_file, settings=config)
+        download_results = await download_multiple_urls(
+            urls, cookies_file=cookies_file, settings=config
+        )
 
         for download_result in download_results:
             # Derive platform from the result's metadata or original URL
             post_url = (download_result.metadata or {}).get("post_url", "")
             platform = identify_platform(post_url) if post_url else None
-            source_label = platform or (download_result.metadata or {}).get("source", "direct_image")
+            source_label = platform or (download_result.metadata or {}).get(
+                "source", "direct_image"
+            )
 
             if not download_result.success:
-                results.append(UploadResult(
-                    filename=download_result.filename or post_url or "unknown",
-                    status="error",
-                    error=download_result.error,
-                    platform=source_label,
-                ))
+                results.append(
+                    UploadResult(
+                        filename=download_result.filename or post_url or "unknown",
+                        status="error",
+                        error=download_result.error,
+                        platform=source_label,
+                    )
+                )
                 continue
 
             try:
@@ -373,7 +424,9 @@ def create_api_routes(config):
                 if download_result.metadata:
                     timestamp = download_result.metadata.get("timestamp")
                     if timestamp:
-                        file_created_at = datetime.fromtimestamp(timestamp, tz=timezone.utc)
+                        file_created_at = datetime.fromtimestamp(
+                            timestamp, tz=timezone.utc
+                        )
 
                 upload_result = await upload_to_immich(
                     file_content=file_content,
@@ -386,16 +439,26 @@ def create_api_routes(config):
                 upload_result.platform = source_label
 
                 # Add to album
-                album_name = batch_request.album_name or getattr(config, 'album_name', None)
-                if album_name and upload_result.asset_id and upload_result.status == "success":
-                    await add_asset_to_album(upload_result.asset_id, album_name, config, httpx_client)
+                album_name = batch_request.album_name or getattr(
+                    config, "album_name", None
+                )
+                if (
+                    album_name
+                    and upload_result.asset_id
+                    and upload_result.status == "success"
+                ):
+                    await add_asset_to_album(
+                        upload_result.asset_id, album_name, config, httpx_client
+                    )
 
                 results.append(upload_result)
 
             finally:
                 background_tasks.add_task(cleanup_download, download_result)
 
-        successful = sum(1 for r in results if r.status == "success" and not r.duplicate)
+        successful = sum(
+            1 for r in results if r.status == "success" and not r.duplicate
+        )
         duplicates = sum(1 for r in results if r.duplicate)
         failed = sum(1 for r in results if r.status == "error")
 
@@ -439,16 +502,24 @@ def create_api_routes(config):
                 content_type=content_type,
                 config=config,
                 httpx_client=httpx_client,
-                )
+            )
 
             # Add to album
-            target_album = album_name or getattr(config, 'album_name', None)
-            if target_album and upload_result.asset_id and upload_result.status == "success":
-                await add_asset_to_album(upload_result.asset_id, target_album, config, httpx_client)
+            target_album = album_name or getattr(config, "album_name", None)
+            if (
+                target_album
+                and upload_result.asset_id
+                and upload_result.status == "success"
+            ):
+                await add_asset_to_album(
+                    upload_result.asset_id, target_album, config, httpx_client
+                )
 
             results.append(upload_result)
 
-        successful = sum(1 for r in results if r.status == "success" and not r.duplicate)
+        successful = sum(
+            1 for r in results if r.status == "success" and not r.duplicate
+        )
         duplicates = sum(1 for r in results if r.duplicate)
         failed = sum(1 for r in results if r.status == "error")
 
@@ -482,9 +553,15 @@ def create_api_routes(config):
             httpx_client=httpx_client,
         )
 
-        target_album = album_name or getattr(config, 'album_name', None)
-        if target_album and upload_result.asset_id and upload_result.status == "success":
-            await add_asset_to_album(upload_result.asset_id, target_album, config, httpx_client)
+        target_album = album_name or getattr(config, "album_name", None)
+        if (
+            target_album
+            and upload_result.asset_id
+            and upload_result.status == "success"
+        ):
+            await add_asset_to_album(
+                upload_result.asset_id, target_album, config, httpx_client
+            )
 
         return upload_result
 
@@ -515,20 +592,44 @@ def create_api_routes(config):
 
             file_content = base64.b64decode(data_str)
         except Exception as e:
-            raise HTTPException(status_code=400, detail=f"Invalid base64 data: {str(e)}")
+            raise HTTPException(
+                status_code=400, detail=f"Invalid base64 data: {str(e)}"
+            )
 
         # Detect file type from magic bytes
         detected_ext, detected_mime = detect_file_type(file_content)
 
         # Determine filename - use provided name or generate one
-        base_filename = upload_request.filename or f"upload_{datetime.utcnow().timestamp()}"
+        base_filename = (
+            upload_request.filename or f"upload_{datetime.utcnow().timestamp()}"
+        )
 
         # If filename lacks extension or has wrong extension, use detected type
         _, existing_ext = os.path.splitext(base_filename)
-        if detected_ext and (not existing_ext or existing_ext.lower() not in ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.heic', '.avif', '.mp4', '.mov', '.bmp', '.tiff']):
+        if detected_ext and (
+            not existing_ext
+            or existing_ext.lower()
+            not in [
+                ".jpg",
+                ".jpeg",
+                ".png",
+                ".gif",
+                ".webp",
+                ".heic",
+                ".avif",
+                ".mp4",
+                ".mov",
+                ".bmp",
+                ".tiff",
+            ]
+        ):
             filename = base_filename + detected_ext
         else:
-            filename = base_filename if existing_ext else base_filename + (detected_ext or '.jpg')
+            filename = (
+                base_filename
+                if existing_ext
+                else base_filename + (detected_ext or ".jpg")
+            )
 
         # Use detected MIME type or fall back to guessing from filename
         if detected_mime:
@@ -545,9 +646,15 @@ def create_api_routes(config):
             httpx_client=httpx_client,
         )
 
-        target_album = upload_request.album_name or getattr(config, 'album_name', None)
-        if target_album and upload_result.asset_id and upload_result.status == "success":
-            await add_asset_to_album(upload_result.asset_id, target_album, config, httpx_client)
+        target_album = upload_request.album_name or getattr(config, "album_name", None)
+        if (
+            target_album
+            and upload_result.asset_id
+            and upload_result.status == "success"
+        ):
+            await add_asset_to_album(
+                upload_result.asset_id, target_album, config, httpx_client
+            )
 
         return upload_result
 
