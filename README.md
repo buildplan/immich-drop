@@ -74,6 +74,9 @@ services:
       CHUNKED_UPLOADS_ENABLED: "false"      # enable chunked uploads
       CHUNK_SIZE_MB: "95"                  # per-chunk size (MB)
 
+      TEST_CONNECTION_ENABLED: ${TEST_CONNECTION_ENABLED:-true}
+      TEST_CONNECTION_SHOW_HOSTNAME: ${TEST_CONNECTION_SHOW_HOSTNAME:-true}
+
       # App internals
       SESSION_SECRET: ${SESSION_SECRET}
 
