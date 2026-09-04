@@ -1,0 +1,9 @@
+fastapi
+uvicorn[standard]
+python-multipart
+httpx
+pillow
+qrcode
+yt-dlp[default,curl-cffi]
+gallery-dl
+itsdangerous
