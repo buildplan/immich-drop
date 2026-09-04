@@ -5,6 +5,8 @@ updates:
     schedule:
       interval: daily
     open-pull-requests-limit: 10
+    ignore:
+      - dependency-name: "pydantic-core"
     groups:
       url-extractors:
         patterns:
@@ -22,10 +24,16 @@ updates:
     labels:
       - "dependencies"
       - "python"
+    commit-message:
+      prefix: "pip prod"
+      prefix-development: "pip dev"
     groups:
       action-dependencies:
         patterns:
           - "*"
+    assignees:
+      - "buildplan"
+
   - package-ecosystem: docker
     directory: "/"
     schedule:
@@ -37,6 +45,11 @@ updates:
       action-dependencies:
         patterns:
           - "*"
+    commit-message:
+      prefix: "[docker] "
+    assignees:
+      - "buildplan"
+
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
@@ -47,3 +60,7 @@ updates:
       action-dependencies:
         patterns:
           - "*"
+    commit-message:
+      prefix: "gh-actions"
+    assignees:
+      - "buildplan"
