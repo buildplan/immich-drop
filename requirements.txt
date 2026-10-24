@@ -53,7 +53,7 @@ itsdangerous==2.2.0
     # via -r requirements.in
 mutagen==1.48.1
     # via yt-dlp
-pillow==12.3.0
+pillow==13.0.0
     # via -r requirements.in
 pycparser==3.0
     # via cffi
